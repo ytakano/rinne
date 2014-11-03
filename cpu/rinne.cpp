@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #ifdef __APPLE__
   #include <GLUT/glut.h>
@@ -56,6 +57,18 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         D.x = R * sin_theta * cosf(A.phi);      \
         D.y = R * sin_theta * sinf(A.phi);      \
         D.z = R * cosf(A.theta);                \
+    } while (0)
+
+#define TO_UV(U, V, A) do {                   \
+        float cos_theta = cosf(A.theta);      \
+        float cos_phi   = cosf(A.phi);        \
+        float sin_phi   = sinf(A.phi);        \
+        U.x = - cos_theta * cos_phi;          \
+        U.y = - cos_theta * sin_phi;          \
+        U.z = sinf(A.theta);                  \
+        V.x =  sin_phi;                       \
+        V.y = - cos_phi;                      \
+        V.z = 0.0f;                           \
     } while (0)
 
 #define QUATERNION_MUL(D, A, B) do {                            \
@@ -119,16 +132,31 @@ cpu_rotate(rn_vec &a, const rn_vec &v, float rad)
 }
 
 void
-display()
+rinne::display()
 {
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
     glFlush();
 
+    glPushMatrix();
+
+    glRotatef(360 * m_rotate_z, 0.0f, 0.0f, 1.0f);
+    glRotatef(360 * m_rotate_x, 1.0f, 0.0f, 0.0f);
+
     glColor3d(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
 
+    print_node();
+
+    glPopMatrix();
+
     glutSwapBuffers();
+}
+
+void
+display()
+{
+    rinne_inst.display();
 }
 
 void
@@ -158,6 +186,22 @@ on_resize(int w, int h)
 }
 
 void
+on_mouse(int button, int state, int x, int y)
+{
+    if (state == GLUT_DOWN) {
+        rinne_inst.on_mouse_down(button, x, y);
+    } else if (state == GLUT_UP) {
+        rinne_inst.on_mouse_up(button, x, y);
+    }
+}
+
+void
+on_mouse_move(int x, int y)
+{
+    rinne_inst.on_mouse_move(x, y);
+}
+
+void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -166,14 +210,98 @@ init_glut(int argc, char *argv[])
     glutDisplayFunc(display);
     glutKeyboardFunc(on_keyboard);
     glutReshapeFunc(on_resize);
+    glutMouseFunc(on_mouse);
+    glutMotionFunc(on_mouse_move);
     glutFullScreen();
     glutMainLoop();
+}
+
+void
+rinne::on_mouse_down(int button, int x, int y)
+{
+    m_is_mouse_down = true;
+    m_mouse_x = x;
+    m_mouse_y = y;
+}
+
+void
+rinne::on_mouse_up(int button, int x, int y)
+{
+    m_is_mouse_down = false;
+}
+
+void
+rinne::on_mouse_move(int x, int y)
+{
+    if (m_is_mouse_down) {
+        int dx = x - m_mouse_x;
+        int dy = m_mouse_y - y;
+
+        m_rotate_z += dx * 0.001;
+        m_rotate_x += dy * 0.001;
+
+        float tmp;
+        m_rotate_z = modff(m_rotate_z, &tmp);
+        if (m_rotate_z < 0.0f) {
+            m_rotate_z += 1.0f;
+        }
+
+        m_rotate_x = modff(m_rotate_x, &tmp);
+        if (m_rotate_x < 0.0f) {
+            m_rotate_x += 1.0f;
+        }
+
+        m_mouse_x = x;
+        m_mouse_y = y;
+
+        glutPostRedisplay();
+    }
+}
+
+void
+rinne::print_node()
+{
+    for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
+        rn_vec a, u, v;
+        TO_RECTANGULAR(a, p->pos, 1.0f);
+        TO_UV(u, v, p->pos);
+
+        glPushMatrix();
+
+        glTranslatef(a.x, a.y, a.z);
+        glColor3d(1.0, 0.0, 0.0);
+        glutWireSphere(0.1, 16, 16);
+
+        glColor3d(0.0, 1.0, 0.0);
+        glBegin(GL_LINES);
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(u.x * 0.5, u.y * 0.5 , u.z * 0.5);
+        glEnd();
+
+        glColor3d(0.0, 0.0, 1.0);
+        glBegin(GL_LINES);
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(v.x * 0.5, v.y * 0.5, v.z * 0.5);
+        glEnd();
+
+        glPopMatrix();
+    }
 }
 
 void
 rinne::cpu_spring_v0()
 {
 
+}
+
+void
+rinne::init_pos()
+{
+    srand(time(NULL));
+    for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
+        p->pos.theta = M_PI * ((double)rand() / RAND_MAX);
+        p->pos.phi   = 2 * M_PI * ((double)rand() / RAND_MAX);
+    }
 }
 
 void
@@ -217,6 +345,8 @@ rinne::read_dot(char *path)
 
         p_edge++;
     }
+
+    init_pos();
 }
 
 int
@@ -236,7 +366,7 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "loading " << argv[0] << " ..." << std::endl;
+    std::cout << "loading " << argv[1] << " ..." << std::endl;
     rinne_inst.read_dot(argv[1]);
 
     init_glut(argc, argv);

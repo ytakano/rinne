@@ -6,6 +6,10 @@ struct rn_quaternion {
     float i, j, k;
 };
 
+struct rn_uv {
+    float u, v;
+};
+
 struct rn_vec {
     float x, y, z;
 };
@@ -32,9 +36,23 @@ struct rn_node {
 class rinne {
 public:
     void read_dot(char *path);
-    rinne() : m_coulomb(1) { }
+    rinne() : m_is_mouse_down(false), m_coulomb(1),
+              m_rotate_z(0.0f), m_rotate_x(0.0f) { }
+
+    void on_mouse_down(int button, int x, int y);
+    void on_mouse_up(int button, int x, int y);
+    void on_mouse_move(int x, int y);
+
+    void display();
 
 private:
+    bool m_is_mouse_down;
+    int  m_mouse_x;
+    int  m_mouse_y;
+
+    float m_rotate_z;
+    float m_rotate_x;
+
     int m_num_node;
     int m_num_edge;
 
@@ -43,6 +61,8 @@ private:
 
     float m_coulomb; // クーロン力の定数
 
+    void init_pos();
+    void print_node();
     void cpu_spring_v0();
 };
 
