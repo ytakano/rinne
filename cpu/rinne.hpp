@@ -62,7 +62,8 @@ private:
     float m_coulomb; // クーロン力の定数
 
     void init_pos();
-    void print_node();
+    void draw_node();
+    void draw_tau();
     void cpu_spring_v0();
 };
 

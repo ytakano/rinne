@@ -59,7 +59,7 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         D.z = R * cosf(A.theta);                \
     } while (0)
 
-#define TO_UV(U, V, A) do {                   \
+#define GET_UV(U, V, A) do {                  \
         float cos_theta = cosf(A.theta);      \
         float cos_phi   = cosf(A.phi);        \
         float sin_phi   = sinf(A.phi);        \
@@ -146,7 +146,8 @@ rinne::display()
     glColor3d(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
 
-    print_node();
+    draw_node();
+    draw_tau();
 
     glPopMatrix();
 
@@ -259,12 +260,80 @@ rinne::on_mouse_move(int x, int y)
 }
 
 void
-rinne::print_node()
+rinne::draw_tau()
+{
+    if (m_num_node == 0)
+        return;
+
+    rn_vec a;
+    TO_RECTANGULAR(a, m_node[0].pos, 1.0f);
+
+    float cos_theta_a = cosf(m_node[0].pos.theta);
+    float sin_theta_a = sinf(m_node[0].pos.theta);
+
+    for (rn_node *p = m_node + 1; p < &m_node[m_num_node]; p++) {
+        rn_vec b;
+        float  t, x, y, z;
+
+        TO_RECTANGULAR(b, p->pos, 1.0f);
+
+        t = 1 - a.x * b.x - a.y * b.y - a.z * b.z;
+
+        x = b.x + a.x * t;
+        y = b.y + a.y * t;
+        z = b.z + a.z * t;
+
+        glPushMatrix();
+        glColor3d(1.0, 1.0, 0.0);
+        glTranslatef(x, y, z);
+        glutWireSphere(0.1, 16, 16);
+        glPopMatrix();
+
+        glBegin(GL_LINES);
+        glVertex3f(b.x, b.y, b.z);
+        glVertex3f(x, y, z);
+        glEnd();
+
+        float psi = acosf(cos_theta_a * cosf(p->pos.theta) +
+                          sin_theta_a * sinf(p->pos.theta) *
+                          cosf(m_node[0].pos.phi - p->pos.phi));
+        rn_vec ba;
+        ba.x = x - a.x;
+        ba.y = y - a.y;
+        ba.z = z - a.z;
+
+        float dist;
+        rn_vec origin = {0.0f, 0.0f, 0.0f};
+        DISTANCE2(dist, ba, origin);
+
+        ba.x /= sqrt(dist);
+        ba.y /= sqrt(dist);
+        ba.z /= sqrt(dist);
+
+        ba.x *= psi;
+        ba.y *= psi;
+        ba.z *= psi;
+
+        glPushMatrix();
+        glColor3d(1.0, 0.0, 1.0);
+        glTranslatef(a.x, a.y, a.z);
+
+        glBegin(GL_LINES);
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(ba.x, ba.y, ba.z);
+        glEnd();
+
+        glPopMatrix();
+    }
+}
+
+void
+rinne::draw_node()
 {
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
         TO_RECTANGULAR(a, p->pos, 1.0f);
-        TO_UV(u, v, p->pos);
+        GET_UV(u, v, p->pos);
 
         glPushMatrix();
 
