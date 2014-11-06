@@ -2,21 +2,21 @@
 #define RINNE_HPP
 
 struct rn_quaternion {
-    float w;
-    float i, j, k;
+    double w;
+    double i, j, k;
 };
 
 struct rn_uv {
-    float u, v;
+    double u, v;
 };
 
 struct rn_vec {
-    float x, y, z;
+    double x, y, z;
 };
 
 struct rn_pos {
-    float theta; // latitude, 0 ... pi
-    float phi;   // longitude, 0 ... 2 pi
+    double theta; // latitude, 0 ... pi
+    double phi;   // longitude, 0 ... 2 pi
 };
 
 struct rn_node;
@@ -50,8 +50,8 @@ private:
     int  m_mouse_x;
     int  m_mouse_y;
 
-    float m_rotate_z;
-    float m_rotate_x;
+    double m_rotate_z;
+    double m_rotate_x;
 
     int m_num_node;
     int m_num_edge;
@@ -59,7 +59,7 @@ private:
     rn_node *m_node;
     rn_edge *m_edge;
 
-    float m_coulomb; // クーロン力の定数
+    double m_coulomb; // クーロン力の定数
 
     void init_pos();
     void draw_node();

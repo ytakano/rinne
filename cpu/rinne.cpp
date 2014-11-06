@@ -26,7 +26,7 @@ typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
 #define DISTANCE2(D, A, B) do {                 \
-        float x2, y2, z2;                       \
+        double x2, y2, z2;                      \
         x2 = A.x - B.x;                         \
         y2 = A.y - B.y;                         \
         z2 = A.z - B.z;                         \
@@ -42,33 +42,33 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         D.z = A.x * B.y - A.y * B.x;            \
     } while (0)
 
-#define TO_SPHERICAL(D, A, R) do {              \
-        float d = sqrtf(A.x * A.x + A.y * A.y); \
-        if (d > 0.0f) {                         \
-            D.phi = acosf(A.x / d);             \
-        } else {                                \
-            D.phi = 0.0f;                       \
-        }                                       \
-        D.theta = acosf(A.z / R);               \
+#define TO_SPHERICAL(D, A, R) do {                      \
+        double d = sqrt(A.x * A.x + A.y * A.y);         \
+        if (d > 0.0) {                                  \
+            D.phi = acos(A.x / d);                      \
+        } else {                                        \
+            D.phi = 0.0;                                \
+        }                                               \
+        D.theta = acos(A.z / R);                        \
     } while (0)
 
-#define TO_RECTANGULAR(D, A, R) do {            \
-        float sin_theta = sinf(A.theta);        \
-        D.x = R * sin_theta * cosf(A.phi);      \
-        D.y = R * sin_theta * sinf(A.phi);      \
-        D.z = R * cosf(A.theta);                \
+#define TO_RECTANGULAR(D, A, R) do {           \
+        double sin_theta = sin(A.theta);       \
+        D.x = R * sin_theta * cos(A.phi);      \
+        D.y = R * sin_theta * sin(A.phi);      \
+        D.z = R * cos(A.theta);                \
     } while (0)
 
-#define GET_UV(U, V, A) do {                  \
-        float cos_theta = cosf(A.theta);      \
-        float cos_phi   = cosf(A.phi);        \
-        float sin_phi   = sinf(A.phi);        \
-        U.x = - cos_theta * cos_phi;          \
-        U.y = - cos_theta * sin_phi;          \
-        U.z = sinf(A.theta);                  \
-        V.x =  sin_phi;                       \
-        V.y = - cos_phi;                      \
-        V.z = 0.0f;                           \
+#define GET_UV(U, V, A) do {                   \
+        double cos_theta = cos(A.theta);       \
+        double cos_phi   = cos(A.phi);         \
+        double sin_phi   = sin(A.phi);         \
+        U.x = - cos_theta * cos_phi;           \
+        U.y = - cos_theta * sin_phi;           \
+        U.z = sin(A.theta);                    \
+        V.x = sin_phi;                         \
+        V.y = - cos_phi;                       \
+        V.z = 0.0;                             \
     } while (0)
 
 #define QUATERNION_MUL(D, A, B) do {                            \
@@ -80,11 +80,11 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
 #define ROTATE(A, V, RAD) do {                  \
         rn_quaternion p, q, r;                  \
-        float r2 = RAD * -0.5f;                 \
-        float sin_rad2 = sinf(r2);              \
-        float cos_rad2 = cosf(r2);              \
+        double r2 = RAD * -0.5;                 \
+        double sin_rad2 = sin(r2);              \
+        double cos_rad2 = cos(r2);              \
                                                 \
-        p.w = 0.0f;                             \
+        p.w = 0.0;                              \
         p.i = A.x;                              \
         p.j = A.y;                              \
         p.k = A.z;                              \
@@ -110,13 +110,13 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
     } while (0)
 
 #define NORMALIZE(V) do {                                       \
-        float d = sqrtf(V.x * V.x + V.y * V.y + V.z * V.z);     \
-        if (d > 0.0f) {                                         \
+        double d = sqrt(V.x * V.x + V.y * V.y + V.z * V.z);     \
+        if (d > 0.0) {                                          \
             V.x /= d;                                           \
             v.y /= d;                                           \
             v.z /= d;                                           \
         } else {                                                \
-            v.x = v.y = v.z = 0.0f;                             \
+            v.x = v.y = v.z = 0.0;                              \
         }                                                       \
     } while (0)
 
@@ -126,7 +126,7 @@ rn_edge *edge_pool;
 rinne rinne_inst;
 
 void
-cpu_rotate(rn_vec &a, const rn_vec &v, float rad)
+cpu_rotate(rn_vec &a, const rn_vec &v, double rad)
 {
     ROTATE(a, v, rad);
 }
@@ -140,8 +140,8 @@ rinne::display()
 
     glPushMatrix();
 
-    glRotatef(360 * m_rotate_z, 0.0f, 0.0f, 1.0f);
-    glRotatef(360 * m_rotate_x, 1.0f, 0.0f, 0.0f);
+    glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
+    glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
 
     glColor3d(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
@@ -241,15 +241,15 @@ rinne::on_mouse_move(int x, int y)
         m_rotate_z += dx * 0.001;
         m_rotate_x += dy * 0.001;
 
-        float tmp;
-        m_rotate_z = modff(m_rotate_z, &tmp);
-        if (m_rotate_z < 0.0f) {
-            m_rotate_z += 1.0f;
+        double tmp;
+        m_rotate_z = modf(m_rotate_z, &tmp);
+        if (m_rotate_z < 0.0) {
+            m_rotate_z += 1.0;
         }
 
-        m_rotate_x = modff(m_rotate_x, &tmp);
-        if (m_rotate_x < 0.0f) {
-            m_rotate_x += 1.0f;
+        m_rotate_x = modf(m_rotate_x, &tmp);
+        if (m_rotate_x < 0.0) {
+            m_rotate_x += 1.0;
         }
 
         m_mouse_x = x;
@@ -266,18 +266,22 @@ rinne::draw_tau()
         return;
 
     rn_vec a;
-    TO_RECTANGULAR(a, m_node[0].pos, 1.0f);
+    TO_RECTANGULAR(a, m_node[0].pos, 1.0);
 
-    float cos_theta_a = cosf(m_node[0].pos.theta);
-    float sin_theta_a = sinf(m_node[0].pos.theta);
+    double cos_theta_a = cos(m_node[0].pos.theta);
+    double sin_theta_a = sin(m_node[0].pos.theta);
+
+    rn_vec au, av;
+
+    GET_UV(au, av, m_node[0].pos);
 
     for (rn_node *p = m_node + 1; p < &m_node[m_num_node]; p++) {
         rn_vec b;
-        float  t, x, y, z;
+        double  t, x, y, z;
 
-        TO_RECTANGULAR(b, p->pos, 1.0f);
+        TO_RECTANGULAR(b, p->pos, 1.0);
 
-        t = 1 - a.x * b.x - a.y * b.y - a.z * b.z;
+        t = 1.0 - a.x * b.x - a.y * b.y - a.z * b.z;
 
         x = b.x + a.x * t;
         y = b.y + a.y * t;
@@ -285,25 +289,25 @@ rinne::draw_tau()
 
         glPushMatrix();
         glColor3d(1.0, 1.0, 0.0);
-        glTranslatef(x, y, z);
+        glTranslated(x, y, z);
         glutWireSphere(0.1, 16, 16);
         glPopMatrix();
 
         glBegin(GL_LINES);
-        glVertex3f(b.x, b.y, b.z);
-        glVertex3f(x, y, z);
+        glVertex3d(b.x, b.y, b.z);
+        glVertex3d(x, y, z);
         glEnd();
 
-        float psi = acosf(cos_theta_a * cosf(p->pos.theta) +
-                          sin_theta_a * sinf(p->pos.theta) *
-                          cosf(m_node[0].pos.phi - p->pos.phi));
+        double psi = acos(cos_theta_a * cos(p->pos.theta) +
+                          sin_theta_a * sin(p->pos.theta) *
+                          cos(m_node[0].pos.phi - p->pos.phi));
         rn_vec ba;
         ba.x = x - a.x;
         ba.y = y - a.y;
         ba.z = z - a.z;
 
-        float dist;
-        rn_vec origin = {0.0f, 0.0f, 0.0f};
+        double dist;
+        rn_vec origin = {0.0, 0.0, 0.0};
         DISTANCE2(dist, ba, origin);
 
         ba.x /= sqrt(dist);
@@ -316,14 +320,99 @@ rinne::draw_tau()
 
         glPushMatrix();
         glColor3d(1.0, 0.0, 1.0);
-        glTranslatef(a.x, a.y, a.z);
+        glTranslated(a.x, a.y, a.z);
 
         glBegin(GL_LINES);
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(ba.x, ba.y, ba.z);
+        glVertex3d(0.0, 0.0, 0.0);
+        glVertex3d(ba.x, ba.y, ba.z);
         glEnd();
 
         glPopMatrix();
+
+        glPushMatrix();
+        glColor3d(1.0, 0.0, 1.0);
+        glTranslated(ba.x + a.x, ba.y + a.y, ba.z + a.z);
+        glutWireSphere(0.1, 16, 16);
+        glPopMatrix();
+
+        rn_vec cross;
+
+        CROSS_PRODUCT(cross, a, ba);
+        DISTANCE2(dist, cross, origin);
+
+        cross.x /= sqrt(dist);
+        cross.y /= sqrt(dist);
+        cross.z /= sqrt(dist);
+
+        rn_vec ra = a;
+        double rad = psi * 0.5;
+        cpu_rotate(ra, cross, rad);
+
+        glPushMatrix();
+        glColor3d(0.0, 1.0, 1.0);
+        glTranslated(ra.x, ra.y, ra.z);
+        glutWireSphere(0.1, 16, 16);
+        glPopMatrix();
+
+
+        rn_uv buv;
+        double bb;
+
+        std::cout << "(x, y, z) = ("
+                  << x << ", " << y << ", " << z << ")"
+                  << std::endl;
+
+        buv.u = au.x * x + au.y * y + au.z * z;
+        buv.v = av.x * x + av.y * y + av.z * z;
+        bb    = a.x * x + a.y * y + a.z * z;
+
+        std::cout << "u = " << buv.u << std::endl;
+        std::cout << "v = " << buv.v << std::endl;
+        std::cout << "a = " << bb << std::endl;
+
+        //buv.u *= 0.5;
+        //buv.v *= 0.5;
+
+        rn_vec b2;
+
+        b2.x = au.x * buv.u + av.x * buv.v + a.x * bb;
+        b2.y = au.y * buv.u + av.y * buv.v + a.y * bb;
+        b2.z = au.z * buv.u + av.z * buv.v + a.z * bb;
+
+        std::cout << "(x', y', z') = ("
+                  << b2.x << ", " << b2.y << ", " << b2.z << ")\n"
+                  << std::endl;
+/*
+        glPushMatrix();
+        glColor3d(1.0, 0.0, 1.0);
+        glTranslated(b2.x, b2.y, b2.z);
+        glutWireSphere(0.1, 16, 16);
+        glPopMatrix();
+
+        std::cout << "(x, y, z) = (" << x << ", " << y << ", " << z << ")"
+                  << std::endl;
+
+        rn_uv buv;
+        double bb;
+
+        buv.u = au.x * x + av.x * y + a.x * z;
+        buv.v = au.y * x + av.y * y + a.y * z;
+        bb    = au.z * x + av.z * y + a.z * z;
+
+        std::cout << "u = " << buv.u << std::endl;
+        std::cout << "v = " << buv.v << std::endl;
+        std::cout << "a = " << bb << std::endl;
+
+        rn_vec b2;
+
+        b2.x = au.x * buv.u + au.y * buv.v + au.z;
+        b2.y = av.x * buv.u + av.y * buv.v + av.z;
+        b2.z = a.x  * buv.u + a.y  * buv.v + a.z;
+
+        std::cout << "(x', y', z') = ("
+                  << b2.x << ", " << b2.y << ", " << b2.z << ")\n"
+                  << std::endl;
+*/
     }
 }
 
@@ -332,25 +421,30 @@ rinne::draw_node()
 {
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
-        TO_RECTANGULAR(a, p->pos, 1.0f);
+        TO_RECTANGULAR(a, p->pos, 1.0);
         GET_UV(u, v, p->pos);
 
         glPushMatrix();
 
-        glTranslatef(a.x, a.y, a.z);
+        glTranslated(a.x, a.y, a.z);
         glColor3d(1.0, 0.0, 0.0);
         glutWireSphere(0.1, 16, 16);
 
+        glBegin(GL_LINES);
+        glVertex3d(0.0, 0.0, 0.0);
+        glVertex3d(a.x * 0.5, a.y * 0.5 , a.z * 0.5);
+        glEnd();
+
         glColor3d(0.0, 1.0, 0.0);
         glBegin(GL_LINES);
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(u.x * 0.5, u.y * 0.5 , u.z * 0.5);
+        glVertex3d(0.0, 0.0, 0.0);
+        glVertex3d(u.x * 0.5, u.y * 0.5 , u.z * 0.5);
         glEnd();
 
         glColor3d(0.0, 0.0, 1.0);
         glBegin(GL_LINES);
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(v.x * 0.5, v.y * 0.5, v.z * 0.5);
+        glVertex3d(0.0, 0.0, 0.0);
+        glVertex3d(v.x * 0.5, v.y * 0.5, v.z * 0.5);
         glEnd();
 
         glPopMatrix();
