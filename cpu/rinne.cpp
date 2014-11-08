@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
 
 #ifdef __APPLE__
   #include <GLUT/glut.h>
@@ -19,80 +20,86 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/graph_utility.hpp>
+#include <boost/thread.hpp>
 
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
 typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
 typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
-#define DISTANCE2(D, A, B) do {                 \
+#define TIMERSEC 100
+
+#define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
-        x2 = A.x - B.x;                         \
-        y2 = A.y - B.y;                         \
-        z2 = A.z - B.z;                         \
-        x2 *= x2;                               \
-        y2 *= y2;                               \
-        z2 *= z2;                               \
-        D = x2 + y2 + z2;                       \
+        x2 = (A).x * (A).x;                     \
+        y2 = (A).y * (A).y;                     \
+        z2 = (A).z * (A).z;                     \
+        (D) = x2 + y2 + z2;                     \
     } while (0)
 
 #define CROSS_PRODUCT(D, A, B) do {             \
-        D.x = A.y * B.z - A.z * B.y;            \
-        D.y = A.z * B.x - A.x * B.z;            \
-        D.z = A.x * B.y - A.y * B.x;            \
+        (D).x = (A).y * (B).z - (A).z * (B).y;  \
+        (D).y = (A).z * (B).x - (A).x * (B).z;  \
+        (D).z = (A).x * (B).y - (A).y * (B).x;  \
     } while (0)
 
-#define TO_SPHERICAL(D, A, R) do {                      \
-        double d = sqrt(A.x * A.x + A.y * A.y);         \
-        if (d > 0.0) {                                  \
-            D.phi = acos(A.x / d);                      \
+#define TO_SPHERICAL(D, A) do {                         \
+        double tmp = (A).x * (A).x + (A).y * (A).y;     \
+        double r   = sqrt(tmp + (A).z * (A).z);         \
+        double rxy = sqrt(tmp);                         \
+        if (r > 0.0) {                                  \
+            (D).theta = acos((A).z / r);                \
+            (D).phi = acos((A).x / rxy);                \
+            if ((A).y < 0.0) {                          \
+                (D).phi = 2 * M_PI - (D).phi;           \
+            }                                           \
         } else {                                        \
-            D.phi = 0.0;                                \
+            (D).theta = 0.0;                            \
+            (D).phi   = 0.0;                            \
         }                                               \
-        D.theta = acos(A.z / R);                        \
     } while (0)
 
-#define TO_RECTANGULAR(D, A, R) do {           \
-        double sin_theta = sin(A.theta);       \
-        D.x = R * sin_theta * cos(A.phi);      \
-        D.y = R * sin_theta * sin(A.phi);      \
-        D.z = R * cos(A.theta);                \
+#define TO_RECTANGULAR(D, A, R) do {            \
+        double sin_theta = sin((A).theta);      \
+        (D).x = (R) * sin_theta * cos((A).phi); \
+        (D).y = (R) * sin_theta * sin((A).phi); \
+        (D).z = (R) * cos((A).theta);           \
     } while (0)
 
 #define GET_UV(U, V, A) do {                   \
-        double cos_theta = cos(A.theta);       \
-        double cos_phi   = cos(A.phi);         \
-        double sin_phi   = sin(A.phi);         \
-        U.x = - cos_theta * cos_phi;           \
-        U.y = - cos_theta * sin_phi;           \
-        U.z = sin(A.theta);                    \
-        V.x = sin_phi;                         \
-        V.y = - cos_phi;                       \
-        V.z = 0.0;                             \
+        double cos_theta = cos((A).theta);     \
+        double cos_phi   = cos((A).phi);       \
+        double sin_phi   = sin((A).phi);       \
+        (U).x = - cos_theta * cos_phi;         \
+        (U).y = - cos_theta * sin_phi;         \
+        (U).z = sin(A.theta);                  \
+        (V).x = sin_phi;                       \
+        (V).y = - cos_phi;                     \
+        (V).z = 0.0;                           \
     } while (0)
 
-#define QUATERNION_MUL(D, A, B) do {                            \
-        D.w = A.w * B.w - A.i * B.i - A.j * B.j - A.k * B.k;    \
-        D.i = A.i * B.w + A.w * B.i - A.k * B.j + A.j * B.k;    \
-        D.j = A.j * B.w + A.k * B.i + A.w * B.j - A.i * B.k;    \
-        D.k = A.k * B.w - A.j * B.i + A.i * B.j + A.w * B.k;    \
+#define QUATERNION_MUL(D, A, B) do {                                    \
+        (D).w = (A).w * (B).w - (A).i * (B).i - (A).j * (B).j - (A).k * (B).k; \
+        (D).i = (A).i * (B).w + (A).w * (B).i - (A).k * (B).j + (A).j * (B).k; \
+        (D).j = (A).j * (B).w + (A).k * (B).i + (A).w * (B).j - (A).i * (B).k; \
+        (D).k = (A).k * (B).w - (A).j * (B).i + (A).i * (B).j + (A).w * (B).k; \
     } while (0)
 
 #define ROTATE(A, V, RAD) do {                  \
         rn_quaternion p, q, r;                  \
-        double r2 = RAD * -0.5;                 \
+        double r2 = (RAD) * -0.5;               \
         double sin_rad2 = sin(r2);              \
         double cos_rad2 = cos(r2);              \
                                                 \
         p.w = 0.0;                              \
-        p.i = A.x;                              \
-        p.j = A.y;                              \
-        p.k = A.z;                              \
+        p.i = (A).x;                            \
+        p.j = (A).y;                            \
+        p.k = (A).z;                            \
                                                 \
         q.w = cos_rad2;                         \
-        q.i = v.x * sin_rad2;                   \
-        q.j = v.y * sin_rad2;                   \
-        q.k = v.z * sin_rad2;                   \
+        q.i = (V).x * sin_rad2;                 \
+        q.j = (V).y * sin_rad2;                 \
+        q.k = (V).z * sin_rad2;                 \
                                                 \
         r.w = cos_rad2;                         \
         r.i = - q.i;                            \
@@ -104,31 +111,38 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         QUATERNION_MUL(tmp, r, p);              \
         QUATERNION_MUL(result, tmp, q);         \
                                                 \
-        A.x = result.i;                         \
-        A.y = result.j;                         \
-        A.z = result.k;                         \
+        (A).x = result.i;                       \
+        (A).y = result.j;                       \
+        (A).z = result.k;                       \
     } while (0)
 
-#define NORMALIZE(V) do {                                       \
-        double d = sqrt(V.x * V.x + V.y * V.y + V.z * V.z);     \
-        if (d > 0.0) {                                          \
-            V.x /= d;                                           \
-            v.y /= d;                                           \
-            v.z /= d;                                           \
-        } else {                                                \
-            v.x = v.y = v.z = 0.0;                              \
-        }                                                       \
+#define NORMALIZE(V) do {                                               \
+        double d = sqrt((V).x * (V).x + (V).y * (V).y + (V).z * (V).z); \
+        if (d > 0.0001) {                                               \
+            d = 1.0 / d;                                                \
+            (V).x *= d;                                                 \
+            (V).y *= d;                                                 \
+            (V).z *= d;                                                 \
+        } else {                                                        \
+            (V).x = (V).y = (V).z = 0.0;                                \
+        }                                                               \
     } while (0)
 
 rn_node *node_pool;
 rn_edge *edge_pool;
 
 rinne rinne_inst;
+boost::thread thread;
 
 void
-cpu_rotate(rn_vec &a, const rn_vec &v, double rad)
+run()
 {
-    ROTATE(a, v, rad);
+    int i = 0;
+    for (;;) {
+        rinne_inst.force_directed();
+        std::cout << ++i << std::endl;
+        //usleep(100000);
+    }
 }
 
 void
@@ -147,7 +161,7 @@ rinne::display()
     glutWireSphere(1.0, 16, 16);
 
     draw_node();
-    draw_tau();
+    //draw_tau();
 
     glPopMatrix();
 
@@ -202,6 +216,12 @@ on_mouse_move(int x, int y)
     rinne_inst.on_mouse_move(x, y);
 }
 
+void glut_timer(int val)
+{
+    glutPostRedisplay();
+    glutTimerFunc(TIMERSEC, glut_timer, 0);
+}
+
 void
 init_glut(int argc, char *argv[])
 {
@@ -213,6 +233,13 @@ init_glut(int argc, char *argv[])
     glutReshapeFunc(on_resize);
     glutMouseFunc(on_mouse);
     glutMotionFunc(on_mouse_move);
+    glutTimerFunc(TIMERSEC, glut_timer, 0);
+
+    //glEnable(GL_BLEND);
+    //glBlendFunc(GL_ONE, GL_ONE);
+    //glBlendEquation(GL_FUNC_ADD);
+
+    //glEnable(GL_DEPTH_TEST);
     glutFullScreen();
     glutMainLoop();
 }
@@ -307,8 +334,7 @@ rinne::draw_tau()
         ba.z = z - a.z;
 
         double dist;
-        rn_vec origin = {0.0, 0.0, 0.0};
-        DISTANCE2(dist, ba, origin);
+        DISTANCE2(dist, ba);
 
         ba.x /= sqrt(dist);
         ba.y /= sqrt(dist);
@@ -335,40 +361,13 @@ rinne::draw_tau()
         glutWireSphere(0.1, 16, 16);
         glPopMatrix();
 
-        rn_vec cross;
-
-        CROSS_PRODUCT(cross, a, ba);
-        DISTANCE2(dist, cross, origin);
-
-        cross.x /= sqrt(dist);
-        cross.y /= sqrt(dist);
-        cross.z /= sqrt(dist);
-
-        rn_vec ra = a;
-        double rad = psi * 0.5;
-        cpu_rotate(ra, cross, rad);
-
-        glPushMatrix();
-        glColor3d(0.0, 1.0, 1.0);
-        glTranslated(ra.x, ra.y, ra.z);
-        glutWireSphere(0.1, 16, 16);
-        glPopMatrix();
-
 
         rn_uv buv;
         double bb;
 
-        std::cout << "(x, y, z) = ("
-                  << x << ", " << y << ", " << z << ")"
-                  << std::endl;
-
         buv.u = au.x * x + au.y * y + au.z * z;
         buv.v = av.x * x + av.y * y + av.z * z;
         bb    = a.x * x + a.y * y + a.z * z;
-
-        std::cout << "u = " << buv.u << std::endl;
-        std::cout << "v = " << buv.v << std::endl;
-        std::cout << "a = " << bb << std::endl;
 
         //buv.u *= 0.5;
         //buv.v *= 0.5;
@@ -379,9 +378,6 @@ rinne::draw_tau()
         b2.y = au.y * buv.u + av.y * buv.v + a.y * bb;
         b2.z = au.z * buv.u + av.z * buv.v + a.z * bb;
 
-        std::cout << "(x', y', z') = ("
-                  << b2.x << ", " << b2.y << ", " << b2.z << ")\n"
-                  << std::endl;
 /*
         glPushMatrix();
         glColor3d(1.0, 0.0, 1.0);
@@ -422,14 +418,15 @@ rinne::draw_node()
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
         TO_RECTANGULAR(a, p->pos, 1.0);
+
         GET_UV(u, v, p->pos);
 
         glPushMatrix();
 
         glTranslated(a.x, a.y, a.z);
         glColor3d(1.0, 0.0, 0.0);
-        glutWireSphere(0.1, 16, 16);
-
+        glutSolidSphere(0.01, 8, 8);
+/*
         glBegin(GL_LINES);
         glVertex3d(0.0, 0.0, 0.0);
         glVertex3d(a.x * 0.5, a.y * 0.5 , a.z * 0.5);
@@ -446,15 +443,195 @@ rinne::draw_node()
         glVertex3d(0.0, 0.0, 0.0);
         glVertex3d(v.x * 0.5, v.y * 0.5, v.z * 0.5);
         glEnd();
+*/
 
         glPopMatrix();
     }
 }
 
 void
-rinne::cpu_spring_v0()
+rinne::get_repulse_vec(rn_vec &uv, double psi)
 {
+    double power;
+    double p = psi * psi;
 
+    //power = m_factor_repulse * m_factor_step;// / p;
+    power = - m_factor_step * m_factor_repulse / p;
+
+    if (isnan(power) || power < -1000.0)
+        power = -1000.0;
+
+    uv.x *= power;
+    uv.y *= power;
+    uv.z *= power;
+}
+
+void
+rinne::get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
+{
+    rn_vec va, vb;
+    rn_vec b2;
+    double cos_theta_a = cos(a.theta);
+    double sin_theta_a = sin(a.theta);
+    double t, norm;
+
+    TO_RECTANGULAR(va, a, 1.0);
+    TO_RECTANGULAR(vb, b, 1.0);
+
+    t = 1.0 - va.x * vb.x - va.y * vb.y - va.z * vb.z;
+
+    v.x = vb.x + va.x * t;
+    v.y = vb.y + va.y * t;
+    v.z = vb.z + va.z * t;
+
+    v.x -= va.x;
+    v.y -= va.y;
+    v.z -= va.z;
+
+    NORMALIZE(v);
+}
+
+void
+rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
+{
+    static int i = 0, j = 0;
+    static double theta[7] = {0.0,
+                              M_PI / 7.0,
+                              2 * M_PI / 7.0,
+                              3 * M_PI / 7.0,
+                              4 * M_PI / 7.0,
+                              5 * M_PI / 7.0,
+                              6 * M_PI / 7.0};
+    static double phi[11] = {0.0,
+                             M_PI / 11.0,
+                             2 * M_PI / 11.0,
+                             3 * M_PI / 11.0,
+                             4 * M_PI / 11.0,
+                             5 * M_PI / 11.0,
+                             6 * M_PI / 11.0,
+                             7 * M_PI / 11.0,
+                             8 * M_PI / 11.0,
+                             9 * M_PI / 11.0,
+                             10 * M_PI / 11.0};
+
+    for (;;) {
+        rn_pos b;
+        b.theta = theta[i++];
+        b.phi   = phi[j++];
+
+        if (i >= 7)
+            i = i % 7;
+        if (j >= 11)
+            j = j % 11;
+
+        double psi;
+        psi = acos(cos(a.theta) * cos(b.theta) +
+                   sin(a.theta) * sin(b.theta) *
+                   cos(a.phi - b.phi));
+
+        if (isnan(psi))
+            continue;
+
+        get_uv_vec(v, a, b);
+        get_repulse_vec(v, 0.0001);
+
+        break;
+    }
+}
+
+void
+rinne::force_directed()
+{
+    if (m_num_node < 2)
+        return;
+
+    rn_pos *p_pos = new rn_pos[m_num_node];
+    rn_pos *pos_idx = p_pos;
+
+    for (rn_node *p1 = m_node; p1 != &m_node[m_num_node]; p1++) {
+        rn_node *p2;
+        rn_vec v1 = {0.0, 0.0, 0.0};
+        rn_vec v2;
+        double cos_theta_a, sin_theta_a;
+        double psi;
+
+        for (p2 = m_node; p2 == p1; p2++) {
+        }
+
+        cos_theta_a = cos(p1->pos.theta);
+        sin_theta_a = sin(p1->pos.theta);
+
+        psi = acos(cos_theta_a * cos(p2->pos.theta) +
+                   sin_theta_a * sin(p2->pos.theta) *
+                   cos(p1->pos.phi - p2->pos.phi));
+
+        if (isnan(psi)) {
+            get_uv_vec_rand(v1, p1->pos);
+        } else {
+            get_uv_vec(v1, p1->pos, p2->pos);
+            get_repulse_vec(v1, psi);
+        }
+
+        p2++;
+        for (; p2 != &m_node[m_num_node]; p2++) {
+            if (p1 == p2)
+                continue;
+
+            psi = acos(cos_theta_a * cos(p2->pos.theta) +
+                       sin_theta_a * sin(p2->pos.theta) *
+                       cos(p1->pos.phi - p2->pos.phi));
+
+            if (isnan(psi)) {
+                get_uv_vec_rand(v2, p1->pos);
+            } else {
+                get_uv_vec(v2, p1->pos, p2->pos);
+                get_repulse_vec(v2, psi);
+            }
+
+            v1.x += v2.x;
+            v1.y += v2.y;
+            v1.z += v2.z;
+        }
+
+/*
+        rn_edge *p_edge;
+        for (p_edge = p1->edge; p_edge != NULL; p_edge = p_edge->next) {
+            rn_vec vtmp;
+
+            get_uv_vec(vtmp, p1, p_edge->dst);
+        }
+*/
+        rn_vec pvec, cross;
+        double rad, norm;
+
+        TO_RECTANGULAR(pvec, p1->pos, 1.0);
+        DISTANCE2(rad, v1);
+
+        rad = sqrt(rad);
+        if (rad > M_PI_4)
+            rad = M_PI_4;
+
+        CROSS_PRODUCT(cross, pvec, v1);
+        DISTANCE2(norm, cross);
+
+        norm = 1.0 / sqrt(norm);
+
+        cross.x *= norm;
+        cross.y *= norm;
+        cross.z *= norm;
+
+        ROTATE(pvec, cross, rad);
+
+        *pos_idx = p1->pos;
+        TO_SPHERICAL(*pos_idx, pvec);
+        pos_idx++;
+    }
+
+    for (int i = 0; i < m_num_node; i++) {
+        m_node[i].pos = p_pos[i];
+    }
+
+    delete p_pos;
 }
 
 void
@@ -462,7 +639,7 @@ rinne::init_pos()
 {
     srand(time(NULL));
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
-        p->pos.theta = M_PI * ((double)rand() / RAND_MAX);
+        p->pos.theta = M_PI_2 * ((double)rand() / RAND_MAX) + M_PI_4;
         p->pos.phi   = 2 * M_PI * ((double)rand() / RAND_MAX);
     }
 }
@@ -503,27 +680,36 @@ rinne::read_dot(char *path)
         p_edge->src = &m_node[s];
         p_edge->dst = &m_node[t];
 
+        rn_edge *p_edge2;
+        for (p_edge2 = p_edge->dst->edge; p_edge2 != NULL;
+             p_edge2 = p_edge2->next) {
+            if (p_edge2->dst == p_edge->src) {
+                p_edge2->is_bidirection = true;
+                continue;
+            }
+        }
+
         p_edge->next = p_edge->src->edge;
         p_edge->src->edge = p_edge;
+        p_edge->is_bidirection = false;
 
         p_edge++;
     }
 
     init_pos();
+
+    std::cout << "#node = " << m_num_node << std::endl;
+    std::cout << "#edge = " << m_num_edge << std::endl;
+
+    m_factor_step /= m_num_node * 50.0;
+
+    boost::thread th(&run);
+    thread = move(th);
 }
 
 int
 main(int argc, char *argv[])
 {
-    rn_vec a, v;
-
-    a.x = 1, a.y = 0, a.z = 0;
-    v.x = 0, v.y = 0, v.z = 1;
-
-    cpu_rotate(a, v, M_PI_4 * 7);
-
-    std::cout << a.x << "," << a.y << "," << a.z << std::endl;
-
     if (argc < 2) {
         std::cerr << "usage: " << argv[0] << " graph.dot" << std::endl;
         return 1;
