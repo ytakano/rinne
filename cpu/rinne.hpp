@@ -41,6 +41,7 @@ public:
               m_rotate_z(0.0),
               m_rotate_x(0.0),
               m_factor_repulse(1.0),
+              m_factor_spring(1.0),
               m_factor_step(1.0) { }
 
     void on_mouse_down(int button, int x, int y);
@@ -74,6 +75,7 @@ private:
     void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
     void get_repulse_vec(rn_vec &uv, double psi);
+    void get_spring_vec(rn_vec &uv, double psi);
 };
 
 #endif // RINNE_HPP

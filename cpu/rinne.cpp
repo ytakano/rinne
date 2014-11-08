@@ -227,6 +227,7 @@ init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowSize(1024, 768);
     glutCreateWindow(argv[0]);
     glutDisplayFunc(display);
     glutKeyboardFunc(on_keyboard);
@@ -240,7 +241,7 @@ init_glut(int argc, char *argv[])
     //glBlendEquation(GL_FUNC_ADD);
 
     //glEnable(GL_DEPTH_TEST);
-    glutFullScreen();
+    //glutFullScreen();
     glutMainLoop();
 }
 
@@ -450,12 +451,24 @@ rinne::draw_node()
 }
 
 void
+rinne::get_spring_vec(rn_vec &uv, double psi)
+{
+    double power;
+    double p = psi * psi * psi;
+
+    power = m_factor_step * m_factor_spring * p;
+
+    uv.x *= power;
+    uv.y *= power;
+    uv.z *= power;
+}
+
+void
 rinne::get_repulse_vec(rn_vec &uv, double psi)
 {
     double power;
     double p = psi * psi;
 
-    //power = m_factor_repulse * m_factor_step;// / p;
     power = - m_factor_step * m_factor_repulse / p;
 
     if (isnan(power) || power < -1000.0)
@@ -593,14 +606,26 @@ rinne::force_directed()
             v1.z += v2.z;
         }
 
-/*
+
         rn_edge *p_edge;
         for (p_edge = p1->edge; p_edge != NULL; p_edge = p_edge->next) {
-            rn_vec vtmp;
+            rn_vec v3;
 
-            get_uv_vec(vtmp, p1, p_edge->dst);
+            psi = acos(cos_theta_a * cos(p_edge->dst.pos.theta) +
+                       sin_theta_a * sin(p_edge->dst.pos.theta) *
+                       cos(p1->pos.phi - p_edge->dst.pos.phi));
+
+            if (isnan(psi))
+                continue;
+
+            get_uv_vec(v3, p1->pos, p_edge->dst.pos);
+            get_spring_vec(v3, psi);
+
+            v1.x += v3.x;
+            v1.y += v3.y;
+            v1.z += v3.z;
         }
-*/
+
         rn_vec pvec, cross;
         double rad, norm;
 
