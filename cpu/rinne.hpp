@@ -25,12 +25,14 @@ struct rn_edge {
     rn_node *src;
     rn_node *dst;
     rn_edge *next;
+    rn_edge *bp_next;
     bool     is_bidirection;
 };
 
 struct rn_node {
     rn_pos   pos;
     rn_edge *edge;
+    rn_edge *bp_edge;
     int      num_edge;
 };
 
@@ -40,8 +42,8 @@ public:
     rinne() : m_is_mouse_down(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
-              m_factor_repulse(1.0),
-              m_factor_spring(1.0),
+              m_factor_repulse(0.01),
+              m_factor_spring(0.01),
               m_factor_step(1.0) { }
 
     void on_mouse_down(int button, int x, int y);

@@ -28,6 +28,7 @@ typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
 #define TIMERSEC 100
+#define SQRTPI 0.5641898
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -241,7 +242,7 @@ init_glut(int argc, char *argv[])
     //glBlendEquation(GL_FUNC_ADD);
 
     //glEnable(GL_DEPTH_TEST);
-    //glutFullScreen();
+    glutFullScreen();
     glutMainLoop();
 }
 
@@ -447,6 +448,16 @@ rinne::draw_node()
 */
 
         glPopMatrix();
+
+        for (rn_edge *p_edge = p->edge; p_edge != NULL; p_edge = p_edge->next) {
+            rn_vec ev;
+            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
+
+            glBegin(GL_LINES);
+            glVertex3d(a.x, a.y, a.z);
+            glVertex3d(ev.x, ev.y , ev.z);
+            glEnd();
+        }
     }
 }
 
@@ -454,7 +465,12 @@ void
 rinne::get_spring_vec(rn_vec &uv, double psi)
 {
     double power;
-    double p = psi * psi * psi;
+    double p = psi / M_PI + 1.0;
+
+    p *= p;
+    p *= p;
+    p *= p;
+    p *= p;
 
     power = m_factor_step * m_factor_spring * p;
 
@@ -467,12 +483,9 @@ void
 rinne::get_repulse_vec(rn_vec &uv, double psi)
 {
     double power;
-    double p = psi * psi;
+    double p = psi + SQRTPI;
 
-    power = - m_factor_step * m_factor_repulse / p;
-
-    if (isnan(power) || power < -1000.0)
-        power = -1000.0;
+    power = - m_factor_step * m_factor_repulse / (p * p);
 
     uv.x *= power;
     uv.y *= power;
@@ -483,10 +496,7 @@ void
 rinne::get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
 {
     rn_vec va, vb;
-    rn_vec b2;
-    double cos_theta_a = cos(a.theta);
-    double sin_theta_a = sin(a.theta);
-    double t, norm;
+    double t;
 
     TO_RECTANGULAR(va, a, 1.0);
     TO_RECTANGULAR(vb, b, 1.0);
@@ -568,11 +578,12 @@ rinne::force_directed()
         double cos_theta_a, sin_theta_a;
         double psi;
 
+        cos_theta_a = cos(p1->pos.theta);
+        sin_theta_a = sin(p1->pos.theta);
+/*
         for (p2 = m_node; p2 == p1; p2++) {
         }
 
-        cos_theta_a = cos(p1->pos.theta);
-        sin_theta_a = sin(p1->pos.theta);
 
         psi = acos(cos_theta_a * cos(p2->pos.theta) +
                    sin_theta_a * sin(p2->pos.theta) *
@@ -584,9 +595,9 @@ rinne::force_directed()
             get_uv_vec(v1, p1->pos, p2->pos);
             get_repulse_vec(v1, psi);
         }
+*/
 
-        p2++;
-        for (; p2 != &m_node[m_num_node]; p2++) {
+        for (p2 = m_node; p2 != &m_node[m_num_node]; p2++) {
             if (p1 == p2)
                 continue;
 
@@ -611,20 +622,39 @@ rinne::force_directed()
         for (p_edge = p1->edge; p_edge != NULL; p_edge = p_edge->next) {
             rn_vec v3;
 
-            psi = acos(cos_theta_a * cos(p_edge->dst.pos.theta) +
-                       sin_theta_a * sin(p_edge->dst.pos.theta) *
-                       cos(p1->pos.phi - p_edge->dst.pos.phi));
+            psi = acos(cos_theta_a * cos(p_edge->dst->pos.theta) +
+                       sin_theta_a * sin(p_edge->dst->pos.theta) *
+                       cos(p1->pos.phi - p_edge->dst->pos.phi));
 
             if (isnan(psi))
                 continue;
 
-            get_uv_vec(v3, p1->pos, p_edge->dst.pos);
+            get_uv_vec(v3, p1->pos, p_edge->dst->pos);
             get_spring_vec(v3, psi);
 
             v1.x += v3.x;
             v1.y += v3.y;
             v1.z += v3.z;
         }
+
+        for (p_edge = p1->bp_edge; p_edge != NULL; p_edge = p_edge->bp_next) {
+            rn_vec v3;
+
+            psi = acos(cos_theta_a * cos(p_edge->src->pos.theta) +
+                       sin_theta_a * sin(p_edge->src->pos.theta) *
+                       cos(p1->pos.phi - p_edge->src->pos.phi));
+
+            if (isnan(psi))
+                continue;
+
+            get_uv_vec(v3, p1->pos, p_edge->src->pos);
+            get_spring_vec(v3, psi);
+
+            v1.x += v3.x;
+            v1.y += v3.y;
+            v1.z += v3.z;
+        }
+
 
         rn_vec pvec, cross;
         double rad, norm;
@@ -717,6 +747,8 @@ rinne::read_dot(char *path)
         p_edge->next = p_edge->src->edge;
         p_edge->src->edge = p_edge;
         p_edge->is_bidirection = false;
+        p_edge->bp_next = p_edge->dst->bp_edge;
+        p_edge->dst->bp_edge = p_edge;
 
         p_edge++;
     }
@@ -726,7 +758,7 @@ rinne::read_dot(char *path)
     std::cout << "#node = " << m_num_node << std::endl;
     std::cout << "#edge = " << m_num_edge << std::endl;
 
-    m_factor_step /= m_num_node * 50.0;
+    m_factor_step /= sqrt(m_num_node);
 
     boost::thread th(&run);
     thread = move(th);
