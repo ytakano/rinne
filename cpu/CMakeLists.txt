@@ -9,7 +9,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(CMAKE_CXX_FLAGS "-Wall -framework GLUT -framework OpenGL")
+  set(CMAKE_CXX_FLAGS "-Wall -framework GLUT -framework OpenGL -Wno-deprecated-declarations")
 ELSE(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "-Wall")
   set(LIBS glut GL GLU)

@@ -80,6 +80,6 @@ class cnn:
 
 if __name__ == "__main__":
     graph = cnn()
-    graph.generate(500, 0.666)
+    graph.generate(100, 0.666)
 
     graph.printLink()

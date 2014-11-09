@@ -27,8 +27,12 @@ typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
 typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
-#define TIMERSEC 100
+#define TIMERSEC 16
 #define SQRTPI 0.5641898
+#define CAMERA_Y -3.0
+#define NODE_R_MAX 0.05
+#define NODE_R_MIN 0.003
+#define NODE_R_DIFF (NODE_R_MAX - NODE_R_MIN)
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -141,7 +145,14 @@ run()
     int i = 0;
     for (;;) {
         rinne_inst.force_directed();
-        std::cout << ++i << std::endl;
+        //std::cout << ++i << std::endl;
+        if (i == 25) {
+            rinne_inst.reduce_step();
+        } else if (i == 50) {
+            rinne_inst.reduce_step();
+        } else if (i == 100) {
+            rinne_inst.reduce_step();
+        }
         //usleep(100000);
     }
 }
@@ -152,6 +163,12 @@ rinne::display()
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
     glFlush();
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(40.0, (double)m_window_w / (double)m_window_h, 0.1, 8);
+    gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
 
     glPushMatrix();
 
@@ -191,14 +208,7 @@ on_keyboard(unsigned char key, int x, int y)
 void
 on_resize(int w, int h)
 {
-    glViewport(0, 0, w, h);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(40.0, (double)w / (double)h, 0.1, 8);
-    gluLookAt(0.0, -4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-
-    glMatrixMode(GL_MODELVIEW);
+    rinne_inst.on_resize(w, h);
 }
 
 void
@@ -217,7 +227,8 @@ on_mouse_move(int x, int y)
     rinne_inst.on_mouse_move(x, y);
 }
 
-void glut_timer(int val)
+void
+glut_timer(int val)
 {
     glutPostRedisplay();
     glutTimerFunc(TIMERSEC, glut_timer, 0);
@@ -237,13 +248,28 @@ init_glut(int argc, char *argv[])
     glutMotionFunc(on_mouse_move);
     glutTimerFunc(TIMERSEC, glut_timer, 0);
 
-    //glEnable(GL_BLEND);
-    //glBlendFunc(GL_ONE, GL_ONE);
-    //glBlendEquation(GL_FUNC_ADD);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendEquation(GL_FUNC_ADD);
 
     //glEnable(GL_DEPTH_TEST);
     glutFullScreen();
     glutMainLoop();
+}
+
+void
+rinne::on_resize(int w, int h)
+{
+    glViewport(0, 0, w, h);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(40.0, (double)w / (double)h, 0.1, 8);
+    gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+
+    m_window_w = w;
+    m_window_h = h;
 }
 
 void
@@ -265,7 +291,7 @@ rinne::on_mouse_move(int x, int y)
 {
     if (m_is_mouse_down) {
         int dx = x - m_mouse_x;
-        int dy = m_mouse_y - y;
+        int dy = y - m_mouse_y;
 
         m_rotate_z += dx * 0.001;
         m_rotate_x += dy * 0.001;
@@ -415,10 +441,75 @@ rinne::draw_tau()
 }
 
 void
-rinne::draw_node()
+rinne::draw_edge()
 {
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
+        for (rn_edge *p_edge = p->edge; p_edge != NULL; p_edge = p_edge->next) {
+            rn_vec ev;
+            rn_pos delta;
+
+            delta.theta = p->pos.theta - p_edge->dst->pos.theta;
+            delta.phi   = p->pos.phi - p_edge->dst->pos.phi;
+
+            if (delta.phi > M_PI) {
+                delta.phi = -(2 * M_PI - delta.phi);
+            } else if (delta.phi < -M_PI) {
+                delta.phi = 2 * M_PI + delta.phi;
+            }
+            
+            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
+            glBegin(GL_LINE_STRIP);
+            glVertex3d(ev.x, ev.y, ev.z);
+
+            rn_pos pos_arc = p_edge->dst->pos;
+            int num_lines = 6;
+
+            delta.theta /= num_lines;
+            delta.phi   /= num_lines;
+
+            for (int i = 1; i < num_lines; i++) {
+                pos_arc.theta += delta.theta;
+                pos_arc.phi   += delta.phi;
+
+                TO_RECTANGULAR(ev, pos_arc, 1.0);
+                glVertex3d(ev.x, ev.y , ev.z);
+            }
+
+            TO_RECTANGULAR(ev, p->pos, 1.0);
+            glVertex3d(ev.x, ev.y , ev.z);
+
+            glEnd();
+        }
+    }
+}
+
+void
+rinne::draw_node()
+{
+    double r_denom = 1.0 / m_max_in_degree;
+    double max_alpha = 1.0;
+    double min_alpha = 0.0;
+    double max_g;
+    double min_g;
+    double max_b;
+    double min_b;
+    double cycle = 10.0;
+    double b, g, alpha;
+
+    // draw far side nodes
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(40.0, (double)m_window_w / (double)m_window_h, -CAMERA_Y, 8);
+    gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+
+    glColor3d(0.0, 0.4, 0.1);
+    for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
+        double r = p->num_bp_edge * r_denom;
+
+        r = r * NODE_R_DIFF + NODE_R_MIN;
+
         TO_RECTANGULAR(a, p->pos, 1.0);
 
         GET_UV(u, v, p->pos);
@@ -426,38 +517,66 @@ rinne::draw_node()
         glPushMatrix();
 
         glTranslated(a.x, a.y, a.z);
-        glColor3d(1.0, 0.0, 0.0);
-        glutSolidSphere(0.01, 8, 8);
-/*
-        glBegin(GL_LINES);
-        glVertex3d(0.0, 0.0, 0.0);
-        glVertex3d(a.x * 0.5, a.y * 0.5 , a.z * 0.5);
-        glEnd();
-
-        glColor3d(0.0, 1.0, 0.0);
-        glBegin(GL_LINES);
-        glVertex3d(0.0, 0.0, 0.0);
-        glVertex3d(u.x * 0.5, u.y * 0.5 , u.z * 0.5);
-        glEnd();
-
-        glColor3d(0.0, 0.0, 1.0);
-        glBegin(GL_LINES);
-        glVertex3d(0.0, 0.0, 0.0);
-        glVertex3d(v.x * 0.5, v.y * 0.5, v.z * 0.5);
-        glEnd();
-*/
+        glutSolidSphere(r, 8, 8);
 
         glPopMatrix();
+    }
 
-        for (rn_edge *p_edge = p->edge; p_edge != NULL; p_edge = p_edge->next) {
-            rn_vec ev;
-            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
+    max_alpha = 1.0;
+    min_alpha = 0.15;
+    max_g = 0.7;
+    min_g = 0.06;
+    max_b = 0.4;
+    min_b = 0.0;
 
-            glBegin(GL_LINES);
-            glVertex3d(a.x, a.y, a.z);
-            glVertex3d(ev.x, ev.y , ev.z);
-            glEnd();
-        }
+    get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
+              cycle);
+
+    // draw edges
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(40.0, (double)m_window_w / (double)m_window_h,
+                   0.1, -CAMERA_Y);
+    gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+
+    glColor4d(0.0, g, b, alpha);
+    draw_edge();
+
+
+    // draw near side nodes
+    max_g = 0.9;
+    min_g = 0.5;
+    max_b = 0.6;
+    min_b = 0.2;
+
+    get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
+              cycle);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(40.0, (double)m_window_w / (double)m_window_h,
+                   0.1, -CAMERA_Y);
+    gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+
+    glColor3d(0.0, g, b);
+    for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
+        rn_vec a, u, v;
+        double r = p->num_bp_edge * r_denom;
+
+        r = r * NODE_R_DIFF + NODE_R_MIN;
+
+        TO_RECTANGULAR(a, p->pos, 1.0);
+
+        GET_UV(u, v, p->pos);
+
+        glPushMatrix();
+
+        glTranslated(a.x, a.y, a.z);
+        glutSolidSphere(r, 8, 8);
+
+        glPopMatrix();
     }
 }
 
@@ -467,6 +586,7 @@ rinne::get_spring_vec(rn_vec &uv, double psi)
     double power;
     double p = psi / M_PI + 1.0;
 
+    p *= p;
     p *= p;
     p *= p;
     p *= p;
@@ -580,22 +700,6 @@ rinne::force_directed()
 
         cos_theta_a = cos(p1->pos.theta);
         sin_theta_a = sin(p1->pos.theta);
-/*
-        for (p2 = m_node; p2 == p1; p2++) {
-        }
-
-
-        psi = acos(cos_theta_a * cos(p2->pos.theta) +
-                   sin_theta_a * sin(p2->pos.theta) *
-                   cos(p1->pos.phi - p2->pos.phi));
-
-        if (isnan(psi)) {
-            get_uv_vec_rand(v1, p1->pos);
-        } else {
-            get_uv_vec(v1, p1->pos, p2->pos);
-            get_repulse_vec(v1, psi);
-        }
-*/
 
         for (p2 = m_node; p2 != &m_node[m_num_node]; p2++) {
             if (p1 == p2)
@@ -735,20 +839,18 @@ rinne::read_dot(char *path)
         p_edge->src = &m_node[s];
         p_edge->dst = &m_node[t];
 
-        rn_edge *p_edge2;
-        for (p_edge2 = p_edge->dst->edge; p_edge2 != NULL;
-             p_edge2 = p_edge2->next) {
-            if (p_edge2->dst == p_edge->src) {
-                p_edge2->is_bidirection = true;
-                continue;
-            }
-        }
-
         p_edge->next = p_edge->src->edge;
         p_edge->src->edge = p_edge;
-        p_edge->is_bidirection = false;
         p_edge->bp_next = p_edge->dst->bp_edge;
         p_edge->dst->bp_edge = p_edge;
+        p_edge->src->num_edge++;
+        p_edge->dst->num_bp_edge++;
+
+        if (m_max_out_degree < p_edge->src->num_edge)
+            m_max_out_degree = p_edge->src->num_edge;
+
+        if (m_max_in_degree < p_edge->dst->num_bp_edge)
+            m_max_in_degree = p_edge->dst->num_bp_edge;
 
         p_edge++;
     }
@@ -758,10 +860,36 @@ rinne::read_dot(char *path)
     std::cout << "#node = " << m_num_node << std::endl;
     std::cout << "#edge = " << m_num_edge << std::endl;
 
-    m_factor_step /= sqrt(m_num_node);
+    m_factor_step /= m_num_node * 100;
 
     boost::thread th(&run);
     thread = move(th);
+}
+
+void
+rinne::get_color(double &g, double &b, double &alpha,
+                 double min_g, double max_g,
+                 double min_b, double max_b,
+                 double min_alpha, double max_alpha, double cycle)
+{
+    double diff_g = max_g - min_g;
+    double diff_b = max_b - min_b;
+    double diff_alpha = max_alpha - min_alpha;
+    double t, r;
+    timeval tv;
+
+    cycle *= 0.5;
+
+    gettimeofday(&tv, NULL);
+
+    t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
+    t -= m_init_sec;
+
+    r = sin(M_PI * (t - M_PI * 0.5) / cycle) * 0.5 + 0.5;
+
+    g = r * diff_g + min_g;
+    b = r * diff_b + min_b;
+    alpha = r * diff_alpha + min_alpha;
 }
 
 int
