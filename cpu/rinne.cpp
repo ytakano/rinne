@@ -37,11 +37,11 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define NODE_R_DIFF (NODE_R_MAX - NODE_R_MIN)
 #define NODE_MAX_G 0.9
 #define NODE_MIN_G 0.5
-#define NODE_MAX_B 0.6
+#define NODE_MAX_B 0.7
 #define NODE_MIN_B 0.2
 #define EDGE_MAX_G 0.7
 #define EDGE_MIN_G 0.06
-#define EDGE_MAX_B 0.5
+#define EDGE_MAX_B 0.6
 #define EDGE_MIN_B 0.0
 #define EDGE_MAX_ALPHA 1.0
 #define EDGE_MIN_ALPHA 0.15
@@ -479,8 +479,10 @@ rinne::draw_tau()
 }
 
 void
-rinne::draw_edge()
+rinne::draw_edge(double g, double b, double alpha)
 {
+    rn_node *dst = m_node_top[m_top_idx - 1];
+
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         for (rn_edge *p_edge = p->edge; p_edge != NULL; p_edge = p_edge->next) {
             rn_vec ev;
@@ -496,6 +498,13 @@ rinne::draw_edge()
             }
             
             TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
+
+            if (!m_is_blink || m_top_idx == 0 || dst == p_edge->dst) {
+                glColor4d(0.0, g, b, alpha);
+            } else {
+                glColor4d(0.0, EDGE_MIN_G, EDGE_MIN_B, EDGE_MIN_ALPHA);
+            }
+
             glBegin(GL_LINE_STRIP);
             glVertex3d(ev.x, ev.y, ev.z);
 
@@ -560,6 +569,7 @@ rinne::draw_node()
         glPopMatrix();
     }
 
+    // draw edges
     if (m_is_blink) {
         max_alpha = EDGE_MAX_ALPHA;
         min_alpha = EDGE_MIN_ALPHA;
@@ -576,16 +586,13 @@ rinne::draw_node()
         alpha = EDGE_MAX_ALPHA;
     }
 
-    // draw edges
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(40.0, (double)m_window_w / (double)m_window_h,
                    0.1, -CAMERA_Y);
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
-
-    glColor4d(0.0, g, b, alpha);
-    draw_edge();
+    draw_edge(g, b, alpha);
 
 
     // draw near side nodes
@@ -602,6 +609,8 @@ rinne::draw_node()
         b = NODE_MIN_G;
     }
 
+    rn_node *dst = m_node_top[m_top_idx - 1];
+
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(40.0, (double)m_window_w / (double)m_window_h,
@@ -609,7 +618,6 @@ rinne::draw_node()
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
 
-    glColor3d(0.0, g, b);
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
         double r = p->num_bp_edge * r_denom;
@@ -619,6 +627,12 @@ rinne::draw_node()
         TO_RECTANGULAR(a, p->pos, 1.0);
 
         GET_UV(u, v, p->pos);
+
+        if (!m_is_blink || m_top_idx == 0 || p == dst) {
+            glColor3d(0.0, g, b);
+        } else {
+            glColor3d(0.0, NODE_MIN_G, NODE_MIN_B);
+        }
 
         glPushMatrix();
 
@@ -681,6 +695,42 @@ rinne::get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
     v.z -= va.z;
 
     NORMALIZE(v);
+}
+
+int
+cmp_node(const void *lhs, const void *rhs)
+{
+    const rn_node *p1 = *(rn_node**)lhs;
+    const rn_node *p2 = *(rn_node**)rhs;
+
+    if (p1->num_bp_edge > p2->num_bp_edge)
+        return -1;
+
+    if (p1->num_bp_edge < p2->num_bp_edge)
+        return 1;
+
+    return 0;
+}
+
+void
+rinne::get_top_n()
+{
+    rn_node **p;
+
+    p = new rn_node*[m_num_node];
+    m_node_top = new rn_node*[m_top_n];
+
+    for (int i = 0; i < m_num_node; i++) {
+        p[i] = &m_node[i];
+    }
+
+    qsort(p, m_num_node, sizeof(p), cmp_node);
+
+    for (int j = 0; j < m_top_n; j++) {
+        m_node_top[j] = p[j];
+    }
+
+    delete[] p;
 }
 
 void
@@ -911,6 +961,8 @@ rinne::read_dot(char *path)
 
     m_factor_step /= m_num_node * 100;
 
+    get_top_n();
+
     boost::thread th(&run);
     thread = move(th);
 }
@@ -924,17 +976,26 @@ rinne::get_color(double &g, double &b, double &alpha,
     double diff_g = max_g - min_g;
     double diff_b = max_b - min_b;
     double diff_alpha = max_alpha - min_alpha;
-    double t, r;
+    double t, diff, r;
     timeval tv;
 
     cycle *= 0.5;
 
     gettimeofday(&tv, NULL);
 
-    t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
-    t -= m_init_sec;
+    t = (double)tv.tv_sec + (double)tv.tv_usec / 1000000.0;//* 0.000001;
+    diff = t - m_init_sec;
 
-    r = sin(M_PI * (t - M_PI * 0.5) / cycle) * 0.5 + 0.5;
+    r = sin(M_PI * (diff - M_PI * 0.5) / cycle) * 0.5 + 0.5;
+
+    if (diff > cycle && r < 0.0001) {
+        m_init_sec = t;
+        m_top_idx++;
+        if (m_top_idx > m_top_n)
+            m_top_idx = 0;
+    }
+
+    //std::cout << r << std::endl;
 
     g = r * diff_g + min_g;
     b = r * diff_b + min_b;

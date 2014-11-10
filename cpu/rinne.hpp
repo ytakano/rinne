@@ -48,6 +48,8 @@ public:
               m_is_blink(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
+              m_top_n(10),
+              m_top_idx(0),
               m_factor_repulse(0.01),
               m_factor_spring(0.01),
               m_factor_step(1.0) {
@@ -89,6 +91,10 @@ private:
     rn_node *m_node;
     rn_edge *m_edge;
 
+    rn_node **m_node_top;
+    int    m_top_n;
+    int    m_top_idx;
+
     double m_factor_repulse;
     double m_factor_spring;
     double m_factor_step;
@@ -96,8 +102,9 @@ private:
 
     void init_pos();
     void draw_node();
-    void draw_edge();
+    void draw_edge(double g, double b, double alpha);
     void draw_tau();
+    void get_top_n();
     void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
     void get_repulse_vec(rn_vec &uv, double psi);
