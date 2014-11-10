@@ -47,6 +47,7 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define EDGE_MIN_B 0.0
 #define EDGE_MAX_ALPHA 1.0
 #define EDGE_MIN_ALPHA 0.15
+#define EDGE_LINES 6
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -183,7 +184,7 @@ run()
         } else if (i == 1000) {
             return;
         }
-        //usleep(100000);
+        usleep(100000);
     }
 }
 
@@ -534,8 +535,13 @@ rinne::draw_edge(double g, double b, double alpha)
     rn_node *dst = m_node_top[m_top_idx - 1];
 
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
+        rn_vec ev, ev1, ev2;
+        double cos_theta_a = cos(p->pos.theta);
+        double sin_theta_a = sin(p->pos.theta);
+
+        TO_RECTANGULAR(ev, p->pos, 1.0);
+
         for (rn_edge *p_edge = p->edge; p_edge != NULL; p_edge = p_edge->next) {
-            rn_vec ev;
             rn_pos delta;
 
             delta.theta = p->pos.theta - p_edge->dst->pos.theta;
@@ -553,39 +559,29 @@ rinne::draw_edge(double g, double b, double alpha)
                 glColor4f(0.0, EDGE_MIN_G, EDGE_MIN_B, EDGE_MIN_ALPHA);
             }
 
-            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
-
-/*
-            TO_RECTANGULAR(ev1, p->pos, 1.0);
             TO_RECTANGULAR(ev2, p_edge->dst->pos, 1.0);
 
-            rn_vec ev1, ev2;
-            double psi = acos(cos_theta_a * cos(p->pos.theta) +
-                              sin_theta_a * sin(p->pos.theta) *
-                              cos(m_node[0].pos.phi - p->pos.phi));
+            double psi = acos(cos_theta_a * cos(p_edge->dst->pos.theta) +
+                              sin_theta_a * sin(p_edge->dst->pos.theta) *
+                              cos(p->pos.phi - p_edge->dst->pos.phi));
 
             rn_vec cross;
-            CROSS_PRODUCT(cross, ev1, ev2);
-*/
+
+            ev1 = ev;
+            psi /= EDGE_LINES;
+
+            CROSS_PRODUCT(cross, ev, ev2);
+            NORMALIZE(cross);
             glBegin(GL_LINE_STRIP);
-            glVertex3f(ev.x, ev.y, ev.z);
 
-            rn_pos pos_arc = p_edge->dst->pos;
-            int num_lines = 6;
+            glVertex3f(ev.x, ev.y , ev.z);
 
-            delta.theta /= num_lines;
-            delta.phi   /= num_lines;
-
-            for (int i = 1; i < num_lines; i++) {
-                pos_arc.theta += delta.theta;
-                pos_arc.phi   += delta.phi;
-
-                TO_RECTANGULAR(ev, pos_arc, 1.0);
-                glVertex3f(ev.x, ev.y , ev.z);
+            for (int i = 0; i < EDGE_LINES - 1; i++) {
+                ROTATE(ev1, cross, psi);
+                glVertex3f(ev1.x, ev1.y, ev1.z);
             }
 
-            TO_RECTANGULAR(ev, p->pos, 1.0);
-            glVertex3f(ev.x, ev.y , ev.z);
+            glVertex3f(ev2.x, ev2.y , ev2.z);
 
             glEnd();
         }

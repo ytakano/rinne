@@ -47,7 +47,7 @@ public:
               m_is_fullscreen(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
-              m_is_blink(1),
+              m_is_blink(0),
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(20),
