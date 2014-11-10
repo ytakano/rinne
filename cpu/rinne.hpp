@@ -42,8 +42,10 @@ class rinne {
 public:
     void read_dot(char *path);
     rinne() : m_is_mouse_down(false),
+              m_is_fullscreen(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
+              m_is_blink(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_factor_repulse(0.01),
@@ -57,14 +59,17 @@ public:
     void on_mouse_down(int button, int x, int y);
     void on_mouse_up(int button, int x, int y);
     void on_mouse_move(int x, int y);
+    void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
     void force_directed();
     void reduce_step() { m_factor_step *= 0.5; }
+    void init_glui();
 
     void display();
 
 private:
     bool m_is_mouse_down;
+    bool m_is_fullscreen;
     int  m_mouse_x;
     int  m_mouse_y;
     int  m_window_w;
@@ -72,6 +77,8 @@ private:
 
     double m_rotate_z;
     double m_rotate_x;
+
+    int m_is_blink;
 
     int m_num_node;
     int m_num_edge;

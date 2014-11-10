@@ -7,6 +7,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <GL/glui.h>
+
 #ifdef __APPLE__
   #include <GLUT/glut.h>
 #else
@@ -33,6 +35,16 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define NODE_R_MAX 0.05
 #define NODE_R_MIN 0.003
 #define NODE_R_DIFF (NODE_R_MAX - NODE_R_MIN)
+#define NODE_MAX_G 0.9
+#define NODE_MIN_G 0.5
+#define NODE_MAX_B 0.6
+#define NODE_MIN_B 0.2
+#define EDGE_MAX_G 0.7
+#define EDGE_MIN_G 0.06
+#define EDGE_MAX_B 0.5
+#define EDGE_MIN_B 0.0
+#define EDGE_MAX_ALPHA 1.0
+#define EDGE_MIN_ALPHA 0.15
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -152,6 +164,8 @@ run()
             rinne_inst.reduce_step();
         } else if (i == 100) {
             rinne_inst.reduce_step();
+        } else if (i == 1000) {
+            return;
         }
         //usleep(100000);
     }
@@ -195,7 +209,23 @@ display()
 void
 on_keyboard(unsigned char key, int x, int y)
 {
+    rinne_inst.on_keyboard(key, x, y);
+}
+
+void
+rinne::on_keyboard(unsigned char key, int x, int y)
+{
     switch (key) {
+    case 'f':
+    case 'F':
+        if (m_is_fullscreen) {
+            glutPositionWindow(0,0);
+            glutReshapeWindow(1200, 900);
+        } else {
+            glutFullScreen();
+        }
+        m_is_fullscreen = ! m_is_fullscreen;
+        break;
     case 'q':
     case 'Q':
     case '\033': // ESC
@@ -235,6 +265,14 @@ glut_timer(int val)
 }
 
 void
+rinne::init_glui()
+{
+    GLUI *glui = GLUI_Master.create_glui("control");
+
+    glui->add_checkbox("blink", &m_is_blink);
+}
+
+void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -252,8 +290,8 @@ init_glut(int argc, char *argv[])
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
 
-    //glEnable(GL_DEPTH_TEST);
-    glutFullScreen();
+    rinne_inst.init_glui();
+
     glutMainLoop();
 }
 
@@ -522,15 +560,21 @@ rinne::draw_node()
         glPopMatrix();
     }
 
-    max_alpha = 1.0;
-    min_alpha = 0.15;
-    max_g = 0.7;
-    min_g = 0.06;
-    max_b = 0.4;
-    min_b = 0.0;
+    if (m_is_blink) {
+        max_alpha = EDGE_MAX_ALPHA;
+        min_alpha = EDGE_MIN_ALPHA;
+        max_g = EDGE_MAX_G;
+        min_g = EDGE_MIN_G;
+        max_b = EDGE_MAX_B;
+        min_b = EDGE_MIN_B;
 
-    get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
-              cycle);
+        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
+                  cycle);
+    } else {
+        g = EDGE_MAX_G;
+        b = EDGE_MAX_B;
+        alpha = EDGE_MAX_ALPHA;
+    }
 
     // draw edges
     glMatrixMode(GL_PROJECTION);
@@ -545,13 +589,18 @@ rinne::draw_node()
 
 
     // draw near side nodes
-    max_g = 0.9;
-    min_g = 0.5;
-    max_b = 0.6;
-    min_b = 0.2;
+    if (m_is_blink) {
+        max_g = NODE_MAX_G;
+        min_g = NODE_MIN_G;
+        max_b = NODE_MAX_B;
+        min_b = NODE_MIN_B;
 
-    get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
-              cycle);
+        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
+                  cycle);
+    } else {
+        g = NODE_MAX_G;
+        b = NODE_MIN_G;
+    }
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
