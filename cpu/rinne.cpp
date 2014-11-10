@@ -24,7 +24,9 @@
 #include <boost/graph/graph_utility.hpp>
 #include <boost/thread.hpp>
 
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> Graph;
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
+                              boost::property<boost::vertex_name_t,
+                                              std::string> > Graph;
 typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
 typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
@@ -152,6 +154,20 @@ rinne rinne_inst;
 boost::thread thread;
 
 void
+render_string(double x, double y, double z, std::string const& str)
+{
+    int len;
+    
+    glRasterPos3f(x, y, z);
+
+    len = str.size();
+
+    for (int i = 0; i < len; i++) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, str.at(i));
+    }
+}
+
+void
 run()
 {
     int i = 0;
@@ -172,8 +188,31 @@ run()
 }
 
 void
+rinne::update_time()
+{
+    double  t, diff, r;
+    double  cycle = m_cycle * 0.5;
+    timeval tv;
+    
+    gettimeofday(&tv, NULL);
+
+    t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
+    diff = t - m_init_sec;
+
+    r = sin(M_PI * (diff - M_PI * 0.5) / cycle) * 0.5 + 0.5;
+
+    if (diff > cycle && r < 0.004) {
+        m_init_sec = t;
+        m_top_idx++;
+        if (m_top_idx > m_top_n)
+            m_top_idx = 0;
+    }
+}
+
+void
 rinne::display()
 {
+    update_time();
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
     glFlush();
@@ -189,7 +228,7 @@ rinne::display()
     glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
     glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
 
-    glColor3d(0.4, 0.4, 0.4);
+    glColor3f(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
 
     draw_node();
@@ -353,6 +392,17 @@ rinne::on_mouse_move(int x, int y)
 }
 
 void
+rinne::draw_label()
+{
+    for (int i = 0; i < m_top_n; i++) {
+        rn_vec v;
+        TO_RECTANGULAR(v, m_node_top[i]->pos, 1.0);
+
+        render_string(v.x, v.y, v.z, m_label[(m_node_top[i] - m_node)]);
+    }
+}
+
+void
 rinne::draw_tau()
 {
     if (m_num_node == 0)
@@ -381,14 +431,14 @@ rinne::draw_tau()
         z = b.z + a.z * t;
 
         glPushMatrix();
-        glColor3d(1.0, 1.0, 0.0);
+        glColor3f(1.0, 1.0, 0.0);
         glTranslated(x, y, z);
         glutWireSphere(0.1, 16, 16);
         glPopMatrix();
 
         glBegin(GL_LINES);
-        glVertex3d(b.x, b.y, b.z);
-        glVertex3d(x, y, z);
+        glVertex3f(b.x, b.y, b.z);
+        glVertex3f(x, y, z);
         glEnd();
 
         double psi = acos(cos_theta_a * cos(p->pos.theta) +
@@ -411,18 +461,18 @@ rinne::draw_tau()
         ba.z *= psi;
 
         glPushMatrix();
-        glColor3d(1.0, 0.0, 1.0);
+        glColor3f(1.0, 0.0, 1.0);
         glTranslated(a.x, a.y, a.z);
 
         glBegin(GL_LINES);
-        glVertex3d(0.0, 0.0, 0.0);
-        glVertex3d(ba.x, ba.y, ba.z);
+        glVertex3f(0.0, 0.0, 0.0);
+        glVertex3f(ba.x, ba.y, ba.z);
         glEnd();
 
         glPopMatrix();
 
         glPushMatrix();
-        glColor3d(1.0, 0.0, 1.0);
+        glColor3f(1.0, 0.0, 1.0);
         glTranslated(ba.x + a.x, ba.y + a.y, ba.z + a.z);
         glutWireSphere(0.1, 16, 16);
         glPopMatrix();
@@ -497,16 +547,28 @@ rinne::draw_edge(double g, double b, double alpha)
                 delta.phi = 2 * M_PI + delta.phi;
             }
             
-            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
-
             if (!m_is_blink || m_top_idx == 0 || dst == p_edge->dst) {
-                glColor4d(0.0, g, b, alpha);
+                glColor4f(0.0, g, b, alpha);
             } else {
-                glColor4d(0.0, EDGE_MIN_G, EDGE_MIN_B, EDGE_MIN_ALPHA);
+                glColor4f(0.0, EDGE_MIN_G, EDGE_MIN_B, EDGE_MIN_ALPHA);
             }
 
+            TO_RECTANGULAR(ev, p_edge->dst->pos, 1.0);
+
+/*
+            TO_RECTANGULAR(ev1, p->pos, 1.0);
+            TO_RECTANGULAR(ev2, p_edge->dst->pos, 1.0);
+
+            rn_vec ev1, ev2;
+            double psi = acos(cos_theta_a * cos(p->pos.theta) +
+                              sin_theta_a * sin(p->pos.theta) *
+                              cos(m_node[0].pos.phi - p->pos.phi));
+
+            rn_vec cross;
+            CROSS_PRODUCT(cross, ev1, ev2);
+*/
             glBegin(GL_LINE_STRIP);
-            glVertex3d(ev.x, ev.y, ev.z);
+            glVertex3f(ev.x, ev.y, ev.z);
 
             rn_pos pos_arc = p_edge->dst->pos;
             int num_lines = 6;
@@ -519,11 +581,11 @@ rinne::draw_edge(double g, double b, double alpha)
                 pos_arc.phi   += delta.phi;
 
                 TO_RECTANGULAR(ev, pos_arc, 1.0);
-                glVertex3d(ev.x, ev.y , ev.z);
+                glVertex3f(ev.x, ev.y , ev.z);
             }
 
             TO_RECTANGULAR(ev, p->pos, 1.0);
-            glVertex3d(ev.x, ev.y , ev.z);
+            glVertex3f(ev.x, ev.y , ev.z);
 
             glEnd();
         }
@@ -540,7 +602,6 @@ rinne::draw_node()
     double min_g;
     double max_b;
     double min_b;
-    double cycle = 10.0;
     double b, g, alpha;
 
     // draw far side nodes
@@ -563,7 +624,7 @@ rinne::draw_node()
 
         glPushMatrix();
 
-        glTranslated(a.x, a.y, a.z);
+        glTranslatef(a.x, a.y, a.z);
         glutSolidSphere(r, 8, 8);
 
         glPopMatrix();
@@ -578,8 +639,7 @@ rinne::draw_node()
         max_b = EDGE_MAX_B;
         min_b = EDGE_MIN_B;
 
-        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
-                  cycle);
+        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha);
     } else {
         g = EDGE_MAX_G;
         b = EDGE_MAX_B;
@@ -602,8 +662,7 @@ rinne::draw_node()
         max_b = NODE_MAX_B;
         min_b = NODE_MIN_B;
 
-        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha,
-                  cycle);
+        get_color(g, b, alpha, min_g, max_g, min_b, max_b, min_alpha, max_alpha);
     } else {
         g = NODE_MAX_G;
         b = NODE_MIN_G;
@@ -629,18 +688,21 @@ rinne::draw_node()
         GET_UV(u, v, p->pos);
 
         if (!m_is_blink || m_top_idx == 0 || p == dst) {
-            glColor3d(0.0, g, b);
+            glColor3f(0.0, g, b);
         } else {
-            glColor3d(0.0, NODE_MIN_G, NODE_MIN_B);
+            glColor3f(0.0, NODE_MIN_G, NODE_MIN_B);
         }
 
         glPushMatrix();
 
-        glTranslated(a.x, a.y, a.z);
+        glTranslatef(a.x, a.y, a.z);
         glutSolidSphere(r, 8, 8);
 
         glPopMatrix();
     }
+
+    glColor3f(0.0, 1.0, 0.8);
+    draw_label();
 }
 
 void
@@ -716,6 +778,9 @@ void
 rinne::get_top_n()
 {
     rn_node **p;
+
+    if (m_num_node < m_top_n)
+        m_top_n = m_num_node;
 
     p = new rn_node*[m_num_node];
     m_node_top = new rn_node*[m_top_n];
@@ -909,13 +974,16 @@ rinne::read_dot(char *path)
 
     Graph g;
     boost::dynamic_properties dp(boost::ignore_other_properties);
-    boost::read_graphviz(file, g, dp);
+    dp.property("vertex_name", get(boost::vertex_name, g));
+
+    boost::read_graphviz(file, g, dp, "vertex_name");
 
     m_num_node = num_vertices(g);
     m_num_edge = num_edges(g);
 
-    m_node = new rn_node[m_num_node];
-    m_edge = new rn_edge[m_num_edge];
+    m_node  = new rn_node[m_num_node];
+    m_edge  = new rn_edge[m_num_edge];
+    m_label = new std::string[m_num_node];
 
 /*
     gpuErrchk(cudaMallocManaged((void**)&m_node,
@@ -928,6 +996,12 @@ rinne::read_dot(char *path)
 
     memset(m_node, 0, sizeof(*m_node) * m_num_node);
     memset(m_edge, 0, sizeof(*m_edge) * m_num_edge);
+    
+    std::pair<vertex_iter, vertex_iter> vp;
+    int i = 0;
+    for (vp = vertices(g); vp.first != vp.second; ++vp.first) {
+        m_label[i++] = get(boost::vertex_name, g, *vp.first);
+    }
 
     std::pair<edge_iter, edge_iter> ep;
     rn_edge *p_edge = m_edge;
@@ -971,29 +1045,22 @@ void
 rinne::get_color(double &g, double &b, double &alpha,
                  double min_g, double max_g,
                  double min_b, double max_b,
-                 double min_alpha, double max_alpha, double cycle)
+                 double min_alpha, double max_alpha)
 {
     double diff_g = max_g - min_g;
     double diff_b = max_b - min_b;
     double diff_alpha = max_alpha - min_alpha;
-    double t, diff, r;
+    double t, diff, r, cycle;
     timeval tv;
 
-    cycle *= 0.5;
+    cycle = m_cycle * 0.5;
 
     gettimeofday(&tv, NULL);
 
-    t = (double)tv.tv_sec + (double)tv.tv_usec / 1000000.0;//* 0.000001;
+    t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
     diff = t - m_init_sec;
 
     r = sin(M_PI * (diff - M_PI * 0.5) / cycle) * 0.5 + 0.5;
-
-    if (diff > cycle && r < 0.0001) {
-        m_init_sec = t;
-        m_top_idx++;
-        if (m_top_idx > m_top_n)
-            m_top_idx = 0;
-    }
 
     //std::cout << r << std::endl;
 

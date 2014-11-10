@@ -3,6 +3,8 @@
 
 #include <sys/time.h>
 
+#include <string>
+
 struct rn_quaternion {
     double w;
     double i, j, k;
@@ -48,11 +50,13 @@ public:
               m_is_blink(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
-              m_top_n(10),
+              m_top_n(20),
               m_top_idx(0),
               m_factor_repulse(0.01),
               m_factor_spring(0.01),
-              m_factor_step(1.0) {
+              m_factor_step(1.0),
+              m_cycle(10.0)
+    {
         timeval tv;
         gettimeofday(&tv, NULL);
         m_init_sec = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
@@ -90,6 +94,7 @@ private:
 
     rn_node *m_node;
     rn_edge *m_edge;
+    std::string *m_label;
 
     rn_node **m_node_top;
     int    m_top_n;
@@ -99,12 +104,15 @@ private:
     double m_factor_spring;
     double m_factor_step;
     double m_init_sec;
+    double m_cycle;
 
     void init_pos();
     void draw_node();
     void draw_edge(double g, double b, double alpha);
+    void draw_label();
     void draw_tau();
     void get_top_n();
+    void update_time();
     void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
     void get_repulse_vec(rn_vec &uv, double psi);
@@ -112,7 +120,7 @@ private:
     void get_color(double &g, double &b, double &alpha,
                    double min_b, double max_b,
                    double min_g, double max_g,
-                   double min_alpha, double max_alpha, double cycle);
+                   double min_alpha, double max_alpha);
 };
 
 #endif // RINNE_HPP
