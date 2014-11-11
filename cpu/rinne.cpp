@@ -37,17 +37,21 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define NODE_R_MAX 0.05
 #define NODE_R_MIN 0.003
 #define NODE_R_DIFF (NODE_R_MAX - NODE_R_MIN)
-#define NODE_MAX_G 0.9
+#define NODE_MAX_G 0.7
 #define NODE_MIN_G 0.5
-#define NODE_MAX_B 0.7
+#define NODE_MAX_B 0.6
 #define NODE_MIN_B 0.2
-#define EDGE_MAX_G 0.7
+#define EDGE_MAX_G 0.5
 #define EDGE_MIN_G 0.06
-#define EDGE_MAX_B 0.6
+#define EDGE_MAX_B 0.4
 #define EDGE_MIN_B 0.0
 #define EDGE_MAX_ALPHA 1.0
 #define EDGE_MIN_ALPHA 0.15
 #define EDGE_LINES 6
+#define LABEL_MAX_G 1.0
+#define LABEL_MIN_G 0.6
+#define LABEL_MAX_B 0.8
+#define LABEL_MIN_B 0.4
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -184,7 +188,7 @@ run()
         } else if (i == 1000) {
             return;
         }
-        usleep(100000);
+        //usleep(100000);
     }
 }
 
@@ -198,6 +202,10 @@ rinne::update_time()
     gettimeofday(&tv, NULL);
 
     t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
+
+    m_prev_sec = m_current_sec;
+    m_current_sec = t;
+
     diff = t - m_init_sec;
 
     r = sin(M_PI * (diff - M_PI * 0.5) / cycle) * 0.5 + 0.5;
@@ -211,9 +219,39 @@ rinne::update_time()
 }
 
 void
+rinne::rotate_view()
+{
+    if (m_is_auto_rotate) {
+        m_rotate_z += (m_current_sec - m_prev_sec) / (m_cycle * 0.5);
+
+        if (m_top_n > 0) {
+            double tmp;
+            double diff;
+
+            diff = -(m_node_top[0]->pos.theta - M_PI_2) / M_PI * 0.5;
+            diff -= m_rotate_x;
+            diff = modf(diff, &tmp);
+
+            if (diff < 0.0)
+                diff += 1.0;
+
+            if (0.001 < diff && diff < 0.99) {
+                m_rotate_x += (m_current_sec - m_prev_sec) / (m_cycle * 0.25);
+                m_rotate_x = modf(m_rotate_x, &tmp);
+                if (m_rotate_x < 0.0) {
+                    m_rotate_x += 1.0;
+                }
+            }
+        }
+    }
+}
+
+void
 rinne::display()
 {
     update_time();
+    rotate_view();
+
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
     glFlush();
@@ -226,8 +264,8 @@ rinne::display()
 
     glPushMatrix();
 
-    glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
     glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
+    glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
 
     glColor3f(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
@@ -310,6 +348,7 @@ rinne::init_glui()
     GLUI *glui = GLUI_Master.create_glui("control");
 
     glui->add_checkbox("blink", &m_is_blink);
+    glui->add_checkbox("rotate automatically", &m_is_auto_rotate);
 }
 
 void
@@ -367,7 +406,7 @@ rinne::on_mouse_up(int button, int x, int y)
 void
 rinne::on_mouse_move(int x, int y)
 {
-    if (m_is_mouse_down) {
+    if (m_is_mouse_down && ! m_is_auto_rotate) {
         int dx = x - m_mouse_x;
         int dy = y - m_mouse_y;
 
@@ -385,6 +424,8 @@ rinne::on_mouse_move(int x, int y)
             m_rotate_x += 1.0;
         }
 
+        std::cout << m_rotate_x << std::endl;
+
         m_mouse_x = x;
         m_mouse_y = y;
 
@@ -395,11 +436,42 @@ rinne::on_mouse_move(int x, int y)
 void
 rinne::draw_label()
 {
+    double g, b, alpha;
+    rn_vec v;
+
     for (int i = 0; i < m_top_n; i++) {
-        rn_vec v;
+        if (i + 1 == m_top_idx)
+            continue;
+
         TO_RECTANGULAR(v, m_node_top[i]->pos, 1.0);
 
+        glColor3f(0.0, 0.0, 0.0);
+        render_string(v.x - 0.005, v.y, v.z - 0.005,
+                      m_label[(m_node_top[i] - m_node)]);
+
+        get_color(g, b, alpha, LABEL_MIN_G, LABEL_MAX_G,
+                  LABEL_MIN_B, LABEL_MAX_B, 0.0, 0.0);
+
+        if (m_top_idx == 0 || !m_is_blink)
+            glColor3f(0.0, g, b);
+        else
+            glColor3f(0.0, LABEL_MIN_G, LABEL_MIN_B);
+
         render_string(v.x, v.y, v.z, m_label[(m_node_top[i] - m_node)]);
+    }
+
+    if (m_top_idx > 0) {
+        TO_RECTANGULAR(v, m_node_top[m_top_idx - 1]->pos, 1.0);
+        
+        glColor3f(0.0, 0.0, 0.0);
+        render_string(v.x - 0.005, v.y, v.z - 0.005,
+                      m_label[(m_node_top[m_top_idx - 1] - m_node)]);
+
+        get_color(g, b, alpha, LABEL_MIN_G, LABEL_MAX_G,
+                  LABEL_MIN_B, LABEL_MAX_B, 0.0, 0.0);
+        glColor3f(0.0, g, b);
+        render_string(v.x, v.y, v.z,
+                      m_label[(m_node_top[m_top_idx - 1] - m_node)]);
     }
 }
 
@@ -580,6 +652,26 @@ rinne::draw_edge(double g, double b, double alpha)
                 ROTATE(ev1, cross, psi);
                 glVertex3f(ev1.x, ev1.y, ev1.z);
             }
+            /*
+            glBegin(GL_LINE_STRIP);
+            glVertex3f(ev.x, ev.y, ev.z);
+
+            rn_pos pos_arc = p_edge->dst->pos;
+            int num_lines = 6;
+
+            delta.theta /= num_lines;
+            delta.phi   /= num_lines;
+
+            for (int i = 1; i < num_lines; i++) {
+                pos_arc.theta += delta.theta;
+                pos_arc.phi   += delta.phi;
+
+                TO_RECTANGULAR(ev, pos_arc, 1.0);
+                glVertex3f(ev.x, ev.y , ev.z);
+                }
+
+            TO_RECTANGULAR(ev, p->pos, 1.0);
+            */
 
             glVertex3f(ev2.x, ev2.y , ev2.z);
 
@@ -697,7 +789,6 @@ rinne::draw_node()
         glPopMatrix();
     }
 
-    glColor3f(0.0, 1.0, 0.8);
     draw_label();
 }
 
@@ -1046,15 +1137,11 @@ rinne::get_color(double &g, double &b, double &alpha,
     double diff_g = max_g - min_g;
     double diff_b = max_b - min_b;
     double diff_alpha = max_alpha - min_alpha;
-    double t, diff, r, cycle;
-    timeval tv;
+    double diff, r, cycle;
 
     cycle = m_cycle * 0.5;
 
-    gettimeofday(&tv, NULL);
-
-    t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
-    diff = t - m_init_sec;
+    diff = m_current_sec - m_init_sec;
 
     r = sin(M_PI * (diff - M_PI * 0.5) / cycle) * 0.5 + 0.5;
 

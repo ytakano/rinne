@@ -47,19 +47,21 @@ public:
               m_is_fullscreen(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
-              m_is_blink(0),
+              m_is_blink(1),
+              m_is_auto_rotate(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
-              m_top_n(20),
+              m_top_n(50),
               m_top_idx(0),
               m_factor_repulse(0.01),
               m_factor_spring(0.01),
               m_factor_step(1.0),
-              m_cycle(10.0)
+              m_cycle(60.0)
     {
         timeval tv;
         gettimeofday(&tv, NULL);
         m_init_sec = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
+        m_prev_sec = m_current_sec = m_init_sec;
     }
 
     void on_mouse_down(int button, int x, int y);
@@ -85,6 +87,7 @@ private:
     double m_rotate_x;
 
     int m_is_blink;
+    int m_is_auto_rotate;
 
     int m_num_node;
     int m_num_edge;
@@ -104,6 +107,8 @@ private:
     double m_factor_spring;
     double m_factor_step;
     double m_init_sec;
+    double m_current_sec;
+    double m_prev_sec;
     double m_cycle;
 
     void init_pos();
@@ -113,6 +118,7 @@ private:
     void draw_tau();
     void get_top_n();
     void update_time();
+    void rotate_view();
     void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
     void get_repulse_vec(rn_vec &uv, double psi);
