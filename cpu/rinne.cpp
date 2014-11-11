@@ -236,7 +236,7 @@ rinne::rotate_view()
                 diff += 1.0;
 
             if (0.001 < diff && diff < 0.99) {
-                m_rotate_x += (m_current_sec - m_prev_sec) / (m_cycle * 0.25);
+                m_rotate_x += (m_current_sec - m_prev_sec) / (m_cycle * 0.125);
                 m_rotate_x = modf(m_rotate_x, &tmp);
                 if (m_rotate_x < 0.0) {
                     m_rotate_x += 1.0;
