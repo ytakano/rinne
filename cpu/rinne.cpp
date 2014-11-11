@@ -224,7 +224,7 @@ rinne::rotate_view()
     if (m_is_auto_rotate) {
         m_rotate_z += (m_current_sec - m_prev_sec) / (m_cycle * 0.5);
 
-        if (m_top_n > 0) {
+        if (m_top_n > 0 && m_is_auto_rotate_x) {
             double tmp;
             double diff;
 
@@ -349,6 +349,7 @@ rinne::init_glui()
 
     glui->add_checkbox("blink", &m_is_blink);
     glui->add_checkbox("rotate automatically", &m_is_auto_rotate);
+    glui->add_checkbox("rotate X asis", &m_is_auto_rotate_x);
 }
 
 void
