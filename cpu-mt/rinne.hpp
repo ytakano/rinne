@@ -49,7 +49,6 @@ public:
               m_rotate_x(0.0),
               m_is_blink(1),
               m_is_auto_rotate(1),
-              m_is_auto_rotate_x(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(50),
@@ -57,7 +56,7 @@ public:
               m_factor_repulse(0.01),
               m_factor_spring(0.01),
               m_factor_step(1.0),
-              m_cycle(60.0)
+              m_cycle(30.0)
     {
         timeval tv;
         gettimeofday(&tv, NULL);
@@ -89,7 +88,6 @@ private:
 
     int m_is_blink;
     int m_is_auto_rotate;
-    int m_is_auto_rotate_x;
 
     int m_num_node;
     int m_num_edge;

@@ -221,26 +221,50 @@ rinne::update_time()
 void
 rinne::rotate_view()
 {
-    if (m_is_auto_rotate) {
-        m_rotate_z += (m_current_sec - m_prev_sec) / (m_cycle * 0.5);
+    if (m_is_auto_rotate && m_top_idx  > 0) {
+        double theta = m_node_top[m_top_idx - 1]->pos.theta + M_PI_2;
+        double diff, tmp;
 
-        if (m_top_n > 0 && m_is_auto_rotate_x) {
-            double tmp;
-            double diff;
+        theta += m_rotate_x * 2 * M_PI;
 
-            diff = -(m_node_top[0]->pos.theta - M_PI_2) / M_PI * 0.5;
-            diff -= m_rotate_x;
-            diff = modf(diff, &tmp);
+        if (theta > 2 * M_PI) {
+            theta -= 2 * M_PI;
+        }
 
-            if (diff < 0.0)
-                diff += 1.0;
+        diff = M_PI - theta;
 
-            if (0.001 < diff && diff < 0.99) {
-                m_rotate_x += (m_current_sec - m_prev_sec) / (m_cycle * 2.0);
-                m_rotate_x = modf(m_rotate_x, &tmp);
-                if (m_rotate_x < 0.0) {
-                    m_rotate_x += 1.0;
-                }
+        if (fabs(diff) > 0.05) {
+            if (diff > 0.0) {
+                m_rotate_x += (m_current_sec - m_prev_sec) / (m_cycle * 4.0);
+            } else {
+                m_rotate_x -= (m_current_sec - m_prev_sec) / (m_cycle * 4.0);
+            }
+
+            m_rotate_x = modf(m_rotate_x, &tmp);
+            if (m_rotate_x < 0.0) {
+                m_rotate_x += 1.0;
+            }
+        }
+
+        double phi = m_node_top[m_top_idx - 1]->pos.phi;
+
+        phi += m_rotate_z * 2 * M_PI;
+
+        if (phi > 2 * M_PI) {
+            phi -= 2 * M_PI;
+        }
+
+        diff = 3 * M_PI_2 - phi;
+        if (fabs(diff) > 0.05) {
+            if (0 < diff && diff < M_PI) {
+                m_rotate_z += (m_current_sec - m_prev_sec) / (m_cycle * 4.0);
+            } else {
+                m_rotate_z -= (m_current_sec - m_prev_sec) / (m_cycle * 4.0);
+            }
+
+            m_rotate_z = modf(m_rotate_z, &tmp);
+            if (m_rotate_z < 0.0) {
+                m_rotate_z += 1.0;
             }
         }
     }
@@ -349,7 +373,6 @@ rinne::init_glui()
 
     glui->add_checkbox("blink", &m_is_blink);
     glui->add_checkbox("rotate automatically", &m_is_auto_rotate);
-    glui->add_checkbox("rotate X asis", &m_is_auto_rotate_x);
 }
 
 void
@@ -424,8 +447,6 @@ rinne::on_mouse_move(int x, int y)
         if (m_rotate_x < 0.0) {
             m_rotate_x += 1.0;
         }
-
-        std::cout << m_rotate_x << std::endl;
 
         m_mouse_x = x;
         m_mouse_y = y;
@@ -632,6 +653,12 @@ rinne::draw_edge(double g, double b, double alpha)
                 glColor4f(0.0, EDGE_MIN_G, EDGE_MIN_B, EDGE_MIN_ALPHA);
             }
 
+            if (m_is_blink && m_top_idx != 0 && dst == p_edge->dst) {
+                glLineWidth(2.0f);
+            } else {
+                glLineWidth(1.0f);
+            }
+
             TO_RECTANGULAR(ev2, p_edge->dst->pos, 1.0);
 
             double psi = acos(cos_theta_a * cos(p_edge->dst->pos.theta) +
@@ -653,30 +680,11 @@ rinne::draw_edge(double g, double b, double alpha)
                 ROTATE(ev1, cross, psi);
                 glVertex3f(ev1.x, ev1.y, ev1.z);
             }
-            /*
-            glBegin(GL_LINE_STRIP);
-            glVertex3f(ev.x, ev.y, ev.z);
-
-            rn_pos pos_arc = p_edge->dst->pos;
-            int num_lines = 6;
-
-            delta.theta /= num_lines;
-            delta.phi   /= num_lines;
-
-            for (int i = 1; i < num_lines; i++) {
-                pos_arc.theta += delta.theta;
-                pos_arc.phi   += delta.phi;
-
-                TO_RECTANGULAR(ev, pos_arc, 1.0);
-                glVertex3f(ev.x, ev.y , ev.z);
-                }
-
-            TO_RECTANGULAR(ev, p->pos, 1.0);
-            */
 
             glVertex3f(ev2.x, ev2.y , ev2.z);
 
             glEnd();
+            glLineWidth(1.0f);
         }
     }
 }
@@ -816,9 +824,13 @@ void
 rinne::get_repulse_vec(rn_vec &uv, double psi)
 {
     double power;
-    double p = psi + SQRTPI;
+    double p = psi + M_PI;
 
     power = - m_factor_step * m_factor_repulse / (p * p);
+
+    if (psi < 0.1) {
+        power -= m_factor_step * 10.0;
+    }
 
     uv.x *= power;
     uv.y *= power;
