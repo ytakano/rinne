@@ -22,7 +22,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/graph_utility.hpp>
-#include <boost/thread.hpp>
+#include <boost/bind.hpp>
 
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
                               boost::property<boost::vertex_name_t,
@@ -156,7 +156,6 @@ rn_node *node_pool;
 rn_edge *edge_pool;
 
 rinne rinne_inst;
-boost::thread thread;
 
 void
 render_string(double x, double y, double z, std::string const& str)
@@ -173,20 +172,21 @@ render_string(double x, double y, double z, std::string const& str)
 }
 
 void
-run()
+run(int id)
 {
     int i = 0;
     for (;;) {
-        rinne_inst.force_directed();
-        //std::cout << ++i << std::endl;
-        if (i == 25) {
-            rinne_inst.reduce_step();
-        } else if (i == 50) {
-            rinne_inst.reduce_step();
-        } else if (i == 100) {
-            rinne_inst.reduce_step();
-        } else if (i == 1000) {
-            return;
+        rinne_inst.force_directed(id);
+        if (id == 0) {
+            if (i == 25) {
+                rinne_inst.reduce_step();
+            } else if (i == 50) {
+                rinne_inst.reduce_step();
+            } else if (i == 100) {
+                rinne_inst.reduce_step();
+            } else if (i == 1000) {
+                return;
+            }
         }
         //usleep(100000);
     }
@@ -947,15 +947,23 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 }
 
 void
-rinne::force_directed()
+rinne::force_directed(int id)
 {
     if (m_num_node < 2)
         return;
 
-    rn_pos *p_pos = new rn_pos[m_num_node];
-    rn_pos *pos_idx = p_pos;
+    //rn_pos *p_pos = new rn_pos[m_num_node];
+    //rn_pos *pos_idx = p_pos;
+    if (id == 0) {
+        m_pos_tmp = new rn_pos[m_num_node];
+    }
 
-    for (rn_node *p1 = m_node; p1 != &m_node[m_num_node]; p1++) {
+    m_barrier->wait();
+
+    rn_pos *pos_idx = &m_pos_tmp[id];
+
+    for (rn_node *p1 = &m_node[id]; p1 < &m_node[m_num_node];
+         p1 += m_num_thread) {
         rn_node *p2;
         rn_vec v1 = {0.0, 0.0, 0.0};
         rn_vec v2;
@@ -1023,7 +1031,6 @@ rinne::force_directed()
             v1.z += v3.z;
         }
 
-
         rn_vec pvec, cross;
         double rad, norm;
 
@@ -1047,14 +1054,19 @@ rinne::force_directed()
 
         *pos_idx = p1->pos;
         TO_SPHERICAL(*pos_idx, pvec);
-        pos_idx++;
+        pos_idx += m_num_thread;
     }
+
+    m_barrier->wait();
 
     for (int i = 0; i < m_num_node; i++) {
-        m_node[i].pos = p_pos[i];
+        m_node[i].pos = m_pos_tmp[i];
     }
 
-    delete p_pos;
+    m_barrier->wait();
+
+    if (id == 0)
+        delete m_pos_tmp;
 }
 
 void
@@ -1137,8 +1149,23 @@ rinne::read_dot(char *path)
 
     get_top_n();
 
-    boost::thread th(&run);
-    thread = move(th);
+    int cores = boost::thread::hardware_concurrency();
+
+    std::cout << cores << " CPU cores found" << std::endl;
+
+    cores /= 2;
+    cores--;
+    if (cores < 0)
+        cores = 1;
+
+    m_num_thread = cores;
+    m_thread = new boost::thread[cores];
+    m_barrier = new boost::barrier(cores);
+
+    for (int i = 0; i < cores; i++) {
+        boost::thread th(boost::bind(&run, i));
+        m_thread[i] = move(th);
+    }
 }
 
 void

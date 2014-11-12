@@ -5,6 +5,9 @@
 
 #include <string>
 
+#include <boost/thread.hpp>
+#include <boost/thread/barrier.hpp>
+
 struct rn_quaternion {
     double w;
     double i, j, k;
@@ -69,13 +72,18 @@ public:
     void on_mouse_move(int x, int y);
     void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
-    void force_directed();
+    void force_directed(int id);
     void reduce_step() { m_factor_step *= 0.5; }
     void init_glui();
 
     void display();
 
 private:
+    int m_num_thread;
+    boost::thread  *m_thread;
+    boost::barrier *m_barrier;
+    rn_pos *m_pos_tmp;
+
     bool m_is_mouse_down;
     bool m_is_fullscreen;
     int  m_mouse_x;
