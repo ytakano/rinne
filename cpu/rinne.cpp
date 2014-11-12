@@ -49,9 +49,9 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define EDGE_MIN_ALPHA 0.15
 #define EDGE_LINES 6
 #define LABEL_MAX_G 1.0
-#define LABEL_MIN_G 0.6
+#define LABEL_MIN_G 0.4
 #define LABEL_MAX_B 0.8
-#define LABEL_MIN_B 0.4
+#define LABEL_MIN_B 0.2
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -708,7 +708,7 @@ rinne::draw_node()
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
 
-    glColor3d(0.0, 0.4, 0.1);
+    glColor3d(0.0, NODE_MIN_G * 0.125, NODE_MIN_B * 0.125);
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
         rn_vec a, u, v;
         double r = p->num_bp_edge * r_denom;
