@@ -174,8 +174,7 @@ render_string(double x, double y, double z, std::string const& str)
 void
 run(int id)
 {
-    int i = 0;
-    for (;;) {
+    for (int i = 0; i < 1000; i++) {
         rinne_inst.force_directed(id);
         if (id == 0) {
             if (i == 25) {
@@ -184,8 +183,6 @@ run(int id)
                 rinne_inst.reduce_step();
             } else if (i == 100) {
                 rinne_inst.reduce_step();
-            } else if (i == 1000) {
-                return;
             }
         }
         //usleep(100000);
