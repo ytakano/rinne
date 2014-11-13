@@ -828,10 +828,6 @@ rinne::get_repulse_vec(rn_vec &uv, double psi)
 
     power = - m_factor_step * m_factor_repulse / (p * p);
 
-    if (psi < 0.1) {
-        power -= m_factor_step * 10.0;
-    }
-
     uv.x *= power;
     uv.y *= power;
     uv.z *= power;
