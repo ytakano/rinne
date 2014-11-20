@@ -5,25 +5,22 @@
 
 #include <string>
 
-#include <boost/thread.hpp>
-#include <boost/thread/barrier.hpp>
-
 struct rn_quaternion {
-    double w;
-    double i, j, k;
+    float w;
+    float i, j, k;
 };
 
 struct rn_uv {
-    double u, v;
+    float u, v;
 };
 
 struct rn_vec {
-    double x, y, z;
+    float x, y, z;
 };
 
 struct rn_pos {
-    double theta; // latitude, 0 ... pi
-    double phi;   // longitude, 0 ... 2 pi
+    float theta; // latitude, 0 ... pi
+    float phi;   // longitude, 0 ... 2 pi
 };
 
 struct rn_node;
@@ -63,7 +60,7 @@ public:
     {
         timeval tv;
         gettimeofday(&tv, NULL);
-        m_init_sec = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
+        m_init_sec = (float)tv.tv_sec + (float)tv.tv_usec * 0.000001;
         m_prev_sec = m_current_sec = m_init_sec;
     }
 
@@ -72,16 +69,12 @@ public:
     void on_mouse_move(int x, int y);
     void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
-    void force_directed(int id);
+    void force_directed();
     void reduce_step() { m_factor_step *= 0.5; }
-    void init_glui();
 
     void display();
 
 private:
-    int m_num_thread;
-    boost::thread  *m_thread;
-    boost::barrier *m_barrier;
     rn_pos *m_pos_tmp;
 
     bool m_is_mouse_down;
@@ -111,10 +104,10 @@ private:
     int    m_top_n;
     int    m_top_idx;
 
-    double m_factor_repulse;
-    double m_factor_spring;
-    double m_factor_step;
-    double m_init_sec;
+    float m_factor_repulse;
+    float m_factor_spring;
+    float m_factor_step;
+    float m_init_sec;
     double m_current_sec;
     double m_prev_sec;
     double m_cycle;
@@ -123,14 +116,13 @@ private:
     void draw_node();
     void draw_edge(double g, double b, double alpha);
     void draw_label();
-    void draw_tau();
     void get_top_n();
     void update_time();
     void rotate_view();
     void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
-    void get_repulse_vec(rn_vec &uv, double psi);
-    void get_spring_vec(rn_vec &uv, double psi);
+    void get_repulse_vec(rn_vec &uv, float psi);
+    void get_spring_vec(rn_vec &uv, float psi);
     void get_color(double &g, double &b, double &alpha,
                    double min_b, double max_b,
                    double min_g, double max_g,

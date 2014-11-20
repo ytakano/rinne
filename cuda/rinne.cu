@@ -7,8 +7,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <GL/glui.h>
-
 #ifdef __APPLE__
   #include <GLUT/glut.h>
 #else
@@ -54,7 +52,7 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define LABEL_MIN_B 0.2
 
 #define DISTANCE2(D, A) do {                    \
-        double x2, y2, z2;                      \
+        float x2, y2, z2;                       \
         x2 = (A).x * (A).x;                     \
         y2 = (A).y * (A).y;                     \
         z2 = (A).z * (A).z;                     \
@@ -68,12 +66,12 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
     } while (0)
 
 #define TO_SPHERICAL(D, A) do {                         \
-        double tmp = (A).x * (A).x + (A).y * (A).y;     \
-        double r   = sqrt(tmp + (A).z * (A).z);         \
-        double rxy = sqrt(tmp);                         \
+        float tmp = (A).x * (A).x + (A).y * (A).y;      \
+        float r   = sqrt(tmp + (A).z * (A).z);          \
+        float rxy = sqrt(tmp);                          \
         if (r > 0.0) {                                  \
-            (D).theta = acos((A).z / r);                \
-            (D).phi = acos((A).x / rxy);                \
+            (D).theta = acosf((A).z / r);               \
+            (D).phi = acosf((A).x / rxy);               \
             if ((A).y < 0.0) {                          \
                 (D).phi = 2 * M_PI - (D).phi;           \
             }                                           \
@@ -83,20 +81,20 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         }                                               \
     } while (0)
 
-#define TO_RECTANGULAR(D, A, R) do {            \
-        double sin_theta = sin((A).theta);      \
-        (D).x = (R) * sin_theta * cos((A).phi); \
-        (D).y = (R) * sin_theta * sin((A).phi); \
-        (D).z = (R) * cos((A).theta);           \
+#define TO_RECTANGULAR(D, A, R) do {             \
+        float sin_theta = sinf((A).theta);       \
+        (D).x = (R) * sin_theta * cosf((A).phi); \
+        (D).y = (R) * sin_theta * sinf((A).phi); \
+        (D).z = (R) * cos((A).theta);            \
     } while (0)
 
 #define GET_UV(U, V, A) do {                   \
-        double cos_theta = cos((A).theta);     \
-        double cos_phi   = cos((A).phi);       \
-        double sin_phi   = sin((A).phi);       \
+        float cos_theta = cosf((A).theta);     \
+        float cos_phi   = cosf((A).phi);       \
+        float sin_phi   = sinf((A).phi);       \
         (U).x = - cos_theta * cos_phi;         \
         (U).y = - cos_theta * sin_phi;         \
-        (U).z = sin(A.theta);                  \
+        (U).z = sinf(A.theta);                 \
         (V).x = sin_phi;                       \
         (V).y = - cos_phi;                     \
         (V).z = 0.0;                           \
@@ -111,9 +109,9 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 
 #define ROTATE(A, V, RAD) do {                  \
         rn_quaternion p, q, r;                  \
-        double r2 = (RAD) * -0.5;               \
-        double sin_rad2 = sin(r2);              \
-        double cos_rad2 = cos(r2);              \
+        float r2 = (RAD) * -0.5;                \
+        float sin_rad2 = sinf(r2);              \
+        float cos_rad2 = cosf(r2);              \
                                                 \
         p.w = 0.0;                              \
         p.i = (A).x;                            \
@@ -141,7 +139,7 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
     } while (0)
 
 #define NORMALIZE(V) do {                                               \
-        double d = sqrt((V).x * (V).x + (V).y * (V).y + (V).z * (V).z); \
+        float d = sqrtf((V).x * (V).x + (V).y * (V).y + (V).z * (V).z); \
         if (d > 0.0001) {                                               \
             d = 1.0 / d;                                                \
             (V).x *= d;                                                 \
@@ -158,7 +156,7 @@ rn_edge *edge_pool;
 rinne rinne_inst;
 
 void
-render_string(double x, double y, double z, std::string const& str)
+render_string(float x, float y, float z, std::string const& str)
 {
     int len;
     
@@ -172,10 +170,11 @@ render_string(double x, double y, double z, std::string const& str)
 }
 
 void
-run(int id)
+run()
 {
+    int id = 0;
     for (int i = 0; i < 1000; i++) {
-        rinne_inst.force_directed(id);
+        rinne_inst.force_directed();
         if (id == 0) {
             if (i == 25) {
                 rinne_inst.reduce_step();
@@ -219,8 +218,8 @@ void
 rinne::rotate_view()
 {
     if (m_is_auto_rotate && m_top_idx  > 0) {
-        double theta = m_node_top[m_top_idx - 1]->pos.theta + M_PI_2;
-        double diff, tmp;
+        float theta = m_node_top[m_top_idx - 1]->pos.theta + M_PI_2;
+        float diff, tmp;
 
         theta += m_rotate_x * 2 * M_PI;
 
@@ -243,7 +242,7 @@ rinne::rotate_view()
             }
         }
 
-        double phi = m_node_top[m_top_idx - 1]->pos.phi;
+        float phi = m_node_top[m_top_idx - 1]->pos.phi;
 
         phi += m_rotate_z * 2 * M_PI;
 
@@ -285,8 +284,8 @@ rinne::display()
 
     glPushMatrix();
 
-    glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
-    glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
+    glRotatef(360 * m_rotate_x, 1.0, 0.0, 0.0);
+    glRotatef(360 * m_rotate_z, 0.0, 0.0, 1.0);
 
     glColor3f(0.4, 0.4, 0.4);
     glutWireSphere(1.0, 16, 16);
@@ -364,15 +363,6 @@ glut_timer(int val)
 }
 
 void
-rinne::init_glui()
-{
-    GLUI *glui = GLUI_Master.create_glui("control");
-
-    glui->add_checkbox("blink", &m_is_blink);
-    glui->add_checkbox("rotate automatically", &m_is_auto_rotate);
-}
-
-void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -389,8 +379,6 @@ init_glut(int argc, char *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
-
-    rinne_inst.init_glui();
 
     glutMainLoop();
 }
@@ -491,132 +479,6 @@ rinne::draw_label()
         glColor3f(0.0, g, b);
         render_string(v.x, v.y, v.z,
                       m_label[(m_node_top[m_top_idx - 1] - m_node)]);
-    }
-}
-
-void
-rinne::draw_tau()
-{
-    if (m_num_node == 0)
-        return;
-
-    rn_vec a;
-    TO_RECTANGULAR(a, m_node[0].pos, 1.0);
-
-    double cos_theta_a = cos(m_node[0].pos.theta);
-    double sin_theta_a = sin(m_node[0].pos.theta);
-
-    rn_vec au, av;
-
-    GET_UV(au, av, m_node[0].pos);
-
-    for (rn_node *p = m_node + 1; p < &m_node[m_num_node]; p++) {
-        rn_vec b;
-        double  t, x, y, z;
-
-        TO_RECTANGULAR(b, p->pos, 1.0);
-
-        t = 1.0 - a.x * b.x - a.y * b.y - a.z * b.z;
-
-        x = b.x + a.x * t;
-        y = b.y + a.y * t;
-        z = b.z + a.z * t;
-
-        glPushMatrix();
-        glColor3f(1.0, 1.0, 0.0);
-        glTranslated(x, y, z);
-        glutWireSphere(0.1, 16, 16);
-        glPopMatrix();
-
-        glBegin(GL_LINES);
-        glVertex3f(b.x, b.y, b.z);
-        glVertex3f(x, y, z);
-        glEnd();
-
-        double psi = acos(cos_theta_a * cos(p->pos.theta) +
-                          sin_theta_a * sin(p->pos.theta) *
-                          cos(m_node[0].pos.phi - p->pos.phi));
-        rn_vec ba;
-        ba.x = x - a.x;
-        ba.y = y - a.y;
-        ba.z = z - a.z;
-
-        double dist;
-        DISTANCE2(dist, ba);
-
-        ba.x /= sqrt(dist);
-        ba.y /= sqrt(dist);
-        ba.z /= sqrt(dist);
-
-        ba.x *= psi;
-        ba.y *= psi;
-        ba.z *= psi;
-
-        glPushMatrix();
-        glColor3f(1.0, 0.0, 1.0);
-        glTranslated(a.x, a.y, a.z);
-
-        glBegin(GL_LINES);
-        glVertex3f(0.0, 0.0, 0.0);
-        glVertex3f(ba.x, ba.y, ba.z);
-        glEnd();
-
-        glPopMatrix();
-
-        glPushMatrix();
-        glColor3f(1.0, 0.0, 1.0);
-        glTranslated(ba.x + a.x, ba.y + a.y, ba.z + a.z);
-        glutWireSphere(0.1, 16, 16);
-        glPopMatrix();
-
-
-        rn_uv buv;
-        double bb;
-
-        buv.u = au.x * x + au.y * y + au.z * z;
-        buv.v = av.x * x + av.y * y + av.z * z;
-        bb    = a.x * x + a.y * y + a.z * z;
-
-        //buv.u *= 0.5;
-        //buv.v *= 0.5;
-
-        rn_vec b2;
-
-        b2.x = au.x * buv.u + av.x * buv.v + a.x * bb;
-        b2.y = au.y * buv.u + av.y * buv.v + a.y * bb;
-        b2.z = au.z * buv.u + av.z * buv.v + a.z * bb;
-
-/*
-        glPushMatrix();
-        glColor3d(1.0, 0.0, 1.0);
-        glTranslated(b2.x, b2.y, b2.z);
-        glutWireSphere(0.1, 16, 16);
-        glPopMatrix();
-
-        std::cout << "(x, y, z) = (" << x << ", " << y << ", " << z << ")"
-                  << std::endl;
-
-        rn_uv buv;
-        double bb;
-
-        buv.u = au.x * x + av.x * y + a.x * z;
-        buv.v = au.y * x + av.y * y + a.y * z;
-        bb    = au.z * x + av.z * y + a.z * z;
-
-        std::cout << "u = " << buv.u << std::endl;
-        std::cout << "v = " << buv.v << std::endl;
-        std::cout << "a = " << bb << std::endl;
-
-        rn_vec b2;
-
-        b2.x = au.x * buv.u + au.y * buv.v + au.z;
-        b2.y = av.x * buv.u + av.y * buv.v + av.z;
-        b2.z = a.x  * buv.u + a.y  * buv.v + a.z;
-
-        std::cout << "(x', y', z') = ("
-                  << b2.x << ", " << b2.y << ", " << b2.z << ")\n"
-                  << std::endl;
-*/
     }
 }
 
@@ -799,10 +661,10 @@ rinne::draw_node()
 }
 
 void
-rinne::get_spring_vec(rn_vec &uv, double psi)
+rinne::get_spring_vec(rn_vec &uv, float psi)
 {
-    double power;
-    double p = psi / M_PI + 1.0;
+    float power;
+    float p = psi / M_PI + 1.0f;
 
     p *= p;
     p *= p;
@@ -818,10 +680,10 @@ rinne::get_spring_vec(rn_vec &uv, double psi)
 }
 
 void
-rinne::get_repulse_vec(rn_vec &uv, double psi)
+rinne::get_repulse_vec(rn_vec &uv, float psi)
 {
-    double power;
-    double p = psi + M_PI;
+    float power;
+    float p = psi + M_PI;
 
     power = - m_factor_step * m_factor_repulse / (p * p);
 
@@ -834,12 +696,12 @@ void
 rinne::get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
 {
     rn_vec va, vb;
-    double t;
+    float t;
 
     TO_RECTANGULAR(va, a, 1.0);
     TO_RECTANGULAR(vb, b, 1.0);
 
-    t = 1.0 - va.x * vb.x - va.y * vb.y - va.z * vb.z;
+    t = 1.0f - va.x * vb.x - va.y * vb.y - va.z * vb.z;
 
     v.x = vb.x + va.x * t;
     v.y = vb.y + va.y * t;
@@ -895,24 +757,24 @@ void
 rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 {
     static int i = 0, j = 0;
-    static double theta[7] = {0.0,
-                              M_PI / 7.0,
-                              2 * M_PI / 7.0,
-                              3 * M_PI / 7.0,
-                              4 * M_PI / 7.0,
-                              5 * M_PI / 7.0,
-                              6 * M_PI / 7.0};
-    static double phi[11] = {0.0,
-                             M_PI / 11.0,
-                             2 * M_PI / 11.0,
-                             3 * M_PI / 11.0,
-                             4 * M_PI / 11.0,
-                             5 * M_PI / 11.0,
-                             6 * M_PI / 11.0,
-                             7 * M_PI / 11.0,
-                             8 * M_PI / 11.0,
-                             9 * M_PI / 11.0,
-                             10 * M_PI / 11.0};
+    static float theta[7] = {0.0,
+                             M_PI / 7.0,
+                             2 * M_PI / 7.0,
+                             3 * M_PI / 7.0,
+                             4 * M_PI / 7.0,
+                             5 * M_PI / 7.0,
+                             6 * M_PI / 7.0};
+    static float phi[11] = {0.0,
+                            M_PI / 11.0,
+                            2 * M_PI / 11.0,
+                            3 * M_PI / 11.0,
+                            4 * M_PI / 11.0,
+                            5 * M_PI / 11.0,
+                            6 * M_PI / 11.0,
+                            7 * M_PI / 11.0,
+                            8 * M_PI / 11.0,
+                            9 * M_PI / 11.0,
+                            10 * M_PI / 11.0};
 
     for (;;) {
         rn_pos b;
@@ -924,10 +786,10 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
         if (j >= 11)
             j = j % 11;
 
-        double psi;
-        psi = acos(cos(a.theta) * cos(b.theta) +
-                   sin(a.theta) * sin(b.theta) *
-                   cos(a.phi - b.phi));
+        float psi;
+        psi = acosf(cosf(a.theta) * cosf(b.theta) +
+                    sinf(a.theta) * sinf(b.theta) *
+                    cosf(a.phi - b.phi));
 
         if (isnan(psi))
             continue;
@@ -940,9 +802,9 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 }
 
 void
-rinne::force_directed(int id)
+rinne::force_directed()
 {
-    if (m_num_node < 2)
+/*    if (m_num_node < 2)
         return;
 
     //rn_pos *p_pos = new rn_pos[m_num_node];
@@ -951,7 +813,7 @@ rinne::force_directed(int id)
         m_pos_tmp = new rn_pos[m_num_node];
     }
 
-    m_barrier->wait();
+    //m_barrier->wait();
 
     rn_pos *pos_idx = &m_pos_tmp[id];
 
@@ -1050,16 +912,17 @@ rinne::force_directed(int id)
         pos_idx += m_num_thread;
     }
 
-    m_barrier->wait();
+    //m_barrier->wait();
 
     for (int i = 0; i < m_num_node; i++) {
         m_node[i].pos = m_pos_tmp[i];
     }
 
-    m_barrier->wait();
+    //m_barrier->wait();
 
     if (id == 0)
         delete m_pos_tmp;
+*/
 }
 
 void
@@ -1142,23 +1005,7 @@ rinne::read_dot(char *path)
 
     get_top_n();
 
-    int cores = boost::thread::hardware_concurrency();
-
-    std::cout << cores << " CPU cores found" << std::endl;
-
-    cores /= 2;
-    cores--;
-    if (cores < 0)
-        cores = 1;
-
-    m_num_thread = cores;
-    m_thread = new boost::thread[cores];
-    m_barrier = new boost::barrier(cores);
-
-    for (int i = 0; i < cores; i++) {
-        boost::thread th(boost::bind(&run, i));
-        m_thread[i] = move(th);
-    }
+    run();
 }
 
 void

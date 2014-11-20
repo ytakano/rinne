@@ -1,27 +1,32 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required (VERSION 2.8.12)
 project (rinne)
 
-IF(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  set(LIBS resolv)
-ENDIF(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+find_package(CUDA REQUIRED)
+find_package(Boost COMPONENTS system graph REQUIRED)
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+IF(NOT DEFINED CCBIN)
+  set(CCBIN g++)
+ENDIF()
+
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -ccbin ${CCBIN} -arch=sm_20)
+
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "-Wall -framework GLUT -framework OpenGL -Wno-deprecated-declarations")
   set(LIBS glui)
 ELSE(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "-Wall")
-  set(LIBS glut GL GLU glui)
+  set(LIBS glut GL GLU)
 ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-find_package(Boost COMPONENTS thread system graph REQUIRED)
+set(LIBS ${LIBS} ${Boost_SYSTEM_LIBRARY} ${Boost_GRAPH_LIBRARY} pthread)
 
-set(LIBS ${LIBS} ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_GRAPH_LIBRARY} pthread)
-
-add_executable(rinne rinne.cpp)
+cuda_add_executable(rinne rinne.cu)
 target_link_libraries(rinne ${LIBS})
