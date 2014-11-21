@@ -1,6 +1,8 @@
 #ifndef RINNE_HPP
 #define RINNE_HPP
 
+#include <pthread.h>
+
 #include <sys/time.h>
 
 #include <string>
@@ -47,8 +49,8 @@ public:
               m_is_fullscreen(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
-              m_is_blink(0),
-              m_is_auto_rotate(0),
+              m_is_blink(1),
+              m_is_auto_rotate(1),
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(50),
@@ -69,6 +71,7 @@ public:
     void on_mouse_move(int x, int y);
     void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
+    void on_menu(int id);
     void reduce_step() { m_factor_step *= 0.5; }
     void copy_result();
     int  get_num_node() { return m_num_node; }
@@ -81,7 +84,7 @@ public:
     void display();
 
 private:
-    rn_pos *m_pos_tmp;
+    pthread_t m_thread;
 
     bool m_is_mouse_down;
     bool m_is_fullscreen;

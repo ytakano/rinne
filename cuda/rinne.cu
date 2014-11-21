@@ -50,6 +50,8 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define LABEL_MIN_G 0.4
 #define LABEL_MAX_B 0.8
 #define LABEL_MIN_B 0.2
+#define MENU_ROTATE 1
+#define MENU_BLINK  2
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void
@@ -191,13 +193,13 @@ render_string(float x, float y, float z, std::string const& str)
     }
 }
 
-void
-run()
+void*
+run(void *arg)
 {
     int num_node = rinne_inst.get_num_node();
 
     if (num_node < 2 )
-        return;
+        return NULL;
 
     int block_size;
     int min_grid_size;
@@ -227,7 +229,7 @@ run()
               << "\nblock size = " << block_size
               << "\ntotal thread = " << total_thread << std::endl;
 
-    for (int i = 0; i < 200; i++) {
+    for (int i = 0; i < 1000; i++) {
         force_directed<<<grid_size, block_size>>>(rinne_inst.get_node_cuda(),
                                                   rinne_inst.get_pos_cuda());
         gpuErrchk(cudaDeviceSynchronize());
@@ -244,6 +246,8 @@ run()
         }
         //usleep(100000);
     }
+
+    return NULL;
 }
 
 void
@@ -421,6 +425,38 @@ glut_timer(int val)
 }
 
 void
+rinne::on_menu(int id)
+{
+    glutPostRedisplay();
+
+    switch (id) {
+    case MENU_ROTATE:
+        m_is_auto_rotate = m_is_auto_rotate ? 0 : 1;
+        break;
+    case MENU_BLINK:
+        m_is_blink = m_is_blink ? 0 : 1;
+        break;
+    default:
+        ;
+    }
+}
+
+void
+on_menu(int id)
+{
+    rinne_inst.on_menu(id);
+}
+
+void
+init_menu()
+{
+    glutCreateMenu(on_menu);
+    glutAddMenuEntry("toggle automatic rotation", 1);
+    glutAddMenuEntry("toggle blinking", 2);
+    glutAttachMenu(GLUT_RIGHT_BUTTON);
+}
+
+void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -438,6 +474,7 @@ init_glut(int argc, char *argv[])
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
 
+    init_menu();
     glutMainLoop();
 }
 
@@ -1099,7 +1136,8 @@ rinne::read_dot(char *path)
     get_top_n();
     init_graph_cuda();
 
-    run();
+    pthread_create(&m_thread, NULL, &run, NULL);
+    pthread_detach(m_thread);
 }
 
 void

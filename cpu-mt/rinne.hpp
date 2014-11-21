@@ -72,6 +72,7 @@ public:
     void on_mouse_move(int x, int y);
     void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
+    void on_menu(int id);
     void force_directed(int id);
     void reduce_step() { m_factor_step *= 0.5; }
 

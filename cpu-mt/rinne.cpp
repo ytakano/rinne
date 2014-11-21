@@ -50,6 +50,8 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define LABEL_MIN_G 0.4
 #define LABEL_MAX_B 0.8
 #define LABEL_MIN_B 0.2
+#define MENU_ROTATE 1
+#define MENU_BLINK  2
 
 #define DISTANCE2(D, A) do {                    \
         double x2, y2, z2;                      \
@@ -363,6 +365,38 @@ glut_timer(int val)
 }
 
 void
+rinne::on_menu(int id)
+{
+    glutPostRedisplay();
+
+    switch (id) {
+    case MENU_ROTATE:
+        m_is_auto_rotate = m_is_auto_rotate ? 0 : 1;
+        break;
+    case MENU_BLINK:
+        m_is_blink = m_is_blink ? 0 : 1;
+        break;
+    default:
+        ;
+    }
+}
+
+void
+on_menu(int id)
+{
+    rinne_inst.on_menu(id);
+}
+
+void
+init_menu()
+{
+    glutCreateMenu(on_menu);
+    glutAddMenuEntry("toggle automatic rotation", 1);
+    glutAddMenuEntry("toggle blinking", 2);
+    glutAttachMenu(GLUT_RIGHT_BUTTON);
+}
+
+void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -379,6 +413,8 @@ init_glut(int argc, char *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
+
+    init_menu();
 
     glutMainLoop();
 }
