@@ -7,8 +7,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <GL/glui.h>
-
 #ifdef __APPLE__
   #include <GLUT/glut.h>
 #else
@@ -177,6 +175,7 @@ run(int id)
     for (int i = 0; i < 1000; i++) {
         rinne_inst.force_directed(id);
         if (id == 0) {
+            std::cout << i << std::endl;
             if (i == 25) {
                 rinne_inst.reduce_step();
             } else if (i == 50) {
@@ -364,15 +363,6 @@ glut_timer(int val)
 }
 
 void
-rinne::init_glui()
-{
-    GLUI *glui = GLUI_Master.create_glui("control");
-
-    glui->add_checkbox("blink", &m_is_blink);
-    glui->add_checkbox("rotate automatically", &m_is_auto_rotate);
-}
-
-void
 init_glut(int argc, char *argv[])
 {
     glutInit(&argc, argv);
@@ -389,8 +379,6 @@ init_glut(int argc, char *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
-
-    rinne_inst.init_glui();
 
     glutMainLoop();
 }
@@ -459,7 +447,7 @@ rinne::draw_label()
     rn_vec v;
 
     for (int i = 0; i < m_top_n; i++) {
-        if (i + 1 == m_top_idx)
+        if (m_is_blink && i + 1 == m_top_idx)
             continue;
 
         TO_RECTANGULAR(v, m_node_top[i]->pos, 1.0);
@@ -471,15 +459,20 @@ rinne::draw_label()
         get_color(g, b, alpha, LABEL_MIN_G, LABEL_MAX_G,
                   LABEL_MIN_B, LABEL_MAX_B, 0.0, 0.0);
 
-        if (m_top_idx == 0 || !m_is_blink)
-            glColor3f(0.0, g, b);
-        else
-            glColor3f(0.0, LABEL_MIN_G, LABEL_MIN_B);
+        if (m_is_blink) {
+            if (m_top_idx == 0) {
+                glColor3f(0.0, g, b);
+            } else{
+                glColor3f(0.0, LABEL_MIN_G, LABEL_MIN_B);
+            }
+        } else {
+            glColor3f(0.0, LABEL_MAX_G, LABEL_MAX_B);
+        }
 
         render_string(v.x, v.y, v.z, m_label[(m_node_top[i] - m_node)]);
     }
 
-    if (m_top_idx > 0) {
+    if (m_is_blink && m_top_idx > 0) {
         TO_RECTANGULAR(v, m_node_top[m_top_idx - 1]->pos, 1.0);
         
         glColor3f(0.0, 0.0, 0.0);
@@ -707,14 +700,12 @@ rinne::draw_node()
 
     glColor3d(0.0, NODE_MIN_G * 0.125, NODE_MIN_B * 0.125);
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
-        rn_vec a, u, v;
+        rn_vec a;
         double r = p->num_bp_edge * r_denom;
 
         r = r * NODE_R_DIFF + NODE_R_MIN;
 
         TO_RECTANGULAR(a, p->pos, 1.0);
-
-        GET_UV(u, v, p->pos);
 
         glPushMatrix();
 
@@ -772,14 +763,12 @@ rinne::draw_node()
     glMatrixMode(GL_MODELVIEW);
 
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
-        rn_vec a, u, v;
+        rn_vec a;
         double r = p->num_bp_edge * r_denom;
 
         r = r * NODE_R_DIFF + NODE_R_MIN;
 
         TO_RECTANGULAR(a, p->pos, 1.0);
-
-        GET_UV(u, v, p->pos);
 
         if (!m_is_blink || m_top_idx == 0 || p == dst) {
             glColor3f(0.0, g, b);

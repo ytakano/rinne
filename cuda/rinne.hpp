@@ -47,13 +47,13 @@ public:
               m_is_fullscreen(false),
               m_rotate_z(0.0),
               m_rotate_x(0.0),
-              m_is_blink(1),
-              m_is_auto_rotate(1),
+              m_is_blink(0),
+              m_is_auto_rotate(0),
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(50),
               m_top_idx(0),
-              m_factor_repulse(0.01),
+              m_factor_repulse(0.1),
               m_factor_spring(0.01),
               m_factor_step(1.0),
               m_cycle(30.0)
@@ -69,8 +69,14 @@ public:
     void on_mouse_move(int x, int y);
     void on_keyboard(unsigned char key, int x, int y);
     void on_resize(int w, int h);
-    void force_directed();
     void reduce_step() { m_factor_step *= 0.5; }
+    void copy_result();
+    int  get_num_node() { return m_num_node; }
+    rn_node* get_node_cuda() { return m_node_cuda; }
+    rn_pos* get_pos_cuda() { return m_pos_cuda; }
+    float get_factor_repulse() { return m_factor_repulse; }
+    float get_factor_step() { return m_factor_step; }
+    float get_factor_spring() { return m_factor_spring; }
 
     void display();
 
@@ -98,6 +104,9 @@ private:
 
     rn_node *m_node;
     rn_edge *m_edge;
+    rn_node *m_node_cuda;
+    rn_edge *m_edge_cuda;
+    rn_pos  *m_pos_cuda;
     std::string *m_label;
 
     rn_node **m_node_top;
@@ -112,6 +121,7 @@ private:
     double m_prev_sec;
     double m_cycle;
 
+    void init_graph_cuda();
     void init_pos();
     void draw_node();
     void draw_edge(double g, double b, double alpha);
@@ -119,10 +129,7 @@ private:
     void get_top_n();
     void update_time();
     void rotate_view();
-    void get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b);
     void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
-    void get_repulse_vec(rn_vec &uv, float psi);
-    void get_spring_vec(rn_vec &uv, float psi);
     void get_color(double &g, double &b, double &alpha,
                    double min_b, double max_b,
                    double min_g, double max_g,

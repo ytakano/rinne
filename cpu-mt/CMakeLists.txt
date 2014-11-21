@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required (VERSION 2.8)
 project (rinne)
 
 IF(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -10,10 +10,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "-Wall -framework GLUT -framework OpenGL -Wno-deprecated-declarations")
-  set(LIBS glui)
 ELSE(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "-Wall")
-  set(LIBS glut GL GLU glui)
+  set(LIBS glut GL GLU)
 ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")

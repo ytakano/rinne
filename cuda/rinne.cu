@@ -51,6 +51,16 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
 #define LABEL_MAX_B 0.8
 #define LABEL_MIN_B 0.2
 
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void
+gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    if (code != cudaSuccess) {
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code),
+                file, line);
+        if (abort) exit(code);
+    }
+}
 #define DISTANCE2(D, A) do {                    \
         float x2, y2, z2;                       \
         x2 = (A).x * (A).x;                     \
@@ -150,10 +160,22 @@ typedef boost::graph_traits<Graph>::edge_iterator edge_iter;
         }                                                               \
     } while (0)
 
-rn_node *node_pool;
-rn_edge *edge_pool;
+#define TO_CUDA_MEM(D, ADDRCPU, HCPU, HCUDA) do {       \
+            if ((ADDRCPU) == NULL) {                    \
+                (D) = NULL;                             \
+            } else {                                    \
+                (D) = (HCUDA) + ((ADDRCPU) - (HCPU));   \
+            }                                           \
+        } while (0);
 
 rinne rinne_inst;
+
+__device__ __constant__ int num_node_cuda;
+__device__ __constant__ float factor_repulse_cuda;
+__device__ __constant__ float factor_step_cuda;
+__device__ __constant__ float factor_spring_cuda;
+
+__global__ void force_directed(rn_node *p_node, rn_pos *p_pos);
 
 void
 render_string(float x, float y, float z, std::string const& str)
@@ -172,17 +194,53 @@ render_string(float x, float y, float z, std::string const& str)
 void
 run()
 {
-    int id = 0;
-    for (int i = 0; i < 1000; i++) {
-        rinne_inst.force_directed();
-        if (id == 0) {
-            if (i == 25) {
-                rinne_inst.reduce_step();
-            } else if (i == 50) {
-                rinne_inst.reduce_step();
-            } else if (i == 100) {
-                rinne_inst.reduce_step();
-            }
+    int num_node = rinne_inst.get_num_node();
+
+    if (num_node < 2 )
+        return;
+
+    int block_size;
+    int min_grid_size;
+    int grid_size;
+    int total_thread;
+
+    gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
+                                                 force_directed, 0, num_node));
+
+    grid_size = (num_node + block_size - 1) / block_size;
+    total_thread = grid_size * block_size;
+
+    float factor_repulse = rinne_inst.get_factor_repulse();
+    float factor_step = rinne_inst.get_factor_step();
+    float factor_spring = rinne_inst.get_factor_spring();
+
+    gpuErrchk(cudaMemcpyToSymbol(num_node_cuda, &num_node,
+                                 sizeof(num_node_cuda)));
+    gpuErrchk(cudaMemcpyToSymbol(factor_repulse_cuda, &factor_repulse,
+                                 sizeof(factor_repulse_cuda)));
+    gpuErrchk(cudaMemcpyToSymbol(factor_step_cuda, &factor_step,
+                                 sizeof(factor_step_cuda)));
+    gpuErrchk(cudaMemcpyToSymbol(factor_spring_cuda, &factor_spring,
+                                 sizeof(factor_spring_cuda)));
+
+    std::cout << "grid size = " << grid_size
+              << "\nblock size = " << block_size
+              << "\ntotal thread = " << total_thread << std::endl;
+
+    for (int i = 0; i < 200; i++) {
+        force_directed<<<grid_size, block_size>>>(rinne_inst.get_node_cuda(),
+                                                  rinne_inst.get_pos_cuda());
+        gpuErrchk(cudaDeviceSynchronize());
+        rinne_inst.copy_result();
+
+        std::cout << i << std::endl;
+
+        if (i == 25) {
+            rinne_inst.reduce_step();
+        } else if (i == 50) {
+            rinne_inst.reduce_step();
+        } else if (i == 100) {
+            rinne_inst.reduce_step();
         }
         //usleep(100000);
     }
@@ -447,7 +505,7 @@ rinne::draw_label()
     rn_vec v;
 
     for (int i = 0; i < m_top_n; i++) {
-        if (i + 1 == m_top_idx)
+        if (m_is_blink && i + 1 == m_top_idx)
             continue;
 
         TO_RECTANGULAR(v, m_node_top[i]->pos, 1.0);
@@ -459,15 +517,20 @@ rinne::draw_label()
         get_color(g, b, alpha, LABEL_MIN_G, LABEL_MAX_G,
                   LABEL_MIN_B, LABEL_MAX_B, 0.0, 0.0);
 
-        if (m_top_idx == 0 || !m_is_blink)
-            glColor3f(0.0, g, b);
-        else
-            glColor3f(0.0, LABEL_MIN_G, LABEL_MIN_B);
+        if (m_is_blink) {
+            if (m_top_idx == 0) {
+                glColor3f(0.0, g, b);
+            } else{
+                glColor3f(0.0, LABEL_MIN_G, LABEL_MIN_B);
+            }
+        } else {
+            glColor3f(0.0, LABEL_MAX_G, LABEL_MAX_B);
+        }
 
         render_string(v.x, v.y, v.z, m_label[(m_node_top[i] - m_node)]);
     }
 
-    if (m_top_idx > 0) {
+    if (m_is_blink && m_top_idx > 0) {
         TO_RECTANGULAR(v, m_node_top[m_top_idx - 1]->pos, 1.0);
         
         glColor3f(0.0, 0.0, 0.0);
@@ -569,14 +632,12 @@ rinne::draw_node()
 
     glColor3d(0.0, NODE_MIN_G * 0.125, NODE_MIN_B * 0.125);
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
-        rn_vec a, u, v;
+        rn_vec a;
         double r = p->num_bp_edge * r_denom;
 
         r = r * NODE_R_DIFF + NODE_R_MIN;
 
         TO_RECTANGULAR(a, p->pos, 1.0);
-
-        GET_UV(u, v, p->pos);
 
         glPushMatrix();
 
@@ -634,14 +695,12 @@ rinne::draw_node()
     glMatrixMode(GL_MODELVIEW);
 
     for (rn_node *p = m_node; p != &m_node[m_num_node]; p++) {
-        rn_vec a, u, v;
+        rn_vec a;
         double r = p->num_bp_edge * r_denom;
 
         r = r * NODE_R_DIFF + NODE_R_MIN;
 
         TO_RECTANGULAR(a, p->pos, 1.0);
-
-        GET_UV(u, v, p->pos);
 
         if (!m_is_blink || m_top_idx == 0 || p == dst) {
             glColor3f(0.0, g, b);
@@ -660,8 +719,9 @@ rinne::draw_node()
     draw_label();
 }
 
+__device__
 void
-rinne::get_spring_vec(rn_vec &uv, float psi)
+get_spring_vec(rn_vec &uv, float psi)
 {
     float power;
     float p = psi / M_PI + 1.0f;
@@ -672,28 +732,30 @@ rinne::get_spring_vec(rn_vec &uv, float psi)
     p *= p;
     p *= p;
 
-    power = m_factor_step * m_factor_spring * p;
+    power = factor_step_cuda * factor_spring_cuda * p;
 
     uv.x *= power;
     uv.y *= power;
     uv.z *= power;
 }
 
+__device__
 void
-rinne::get_repulse_vec(rn_vec &uv, float psi)
+get_repulse_vec(rn_vec &uv, float psi)
 {
     float power;
     float p = psi + M_PI;
 
-    power = - m_factor_step * m_factor_repulse / (p * p);
+    power = - factor_step_cuda * factor_repulse_cuda / (p * p);
 
     uv.x *= power;
     uv.y *= power;
     uv.z *= power;
 }
 
+__device__
 void
-rinne::get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
+get_uv_vec(rn_vec &v, const rn_pos &a, const rn_pos &b)
 {
     rn_vec va, vb;
     float t;
@@ -754,6 +816,28 @@ rinne::get_top_n()
 }
 
 void
+rinne::copy_result()
+{
+    rn_pos  *p_pos = new rn_pos[m_num_node];
+    rn_node *p_node = new rn_node[m_num_node];
+    
+    gpuErrchk(cudaMemcpy(p_pos, m_pos_cuda, sizeof(*p_pos) * m_num_node,
+                         cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(p_node, m_node_cuda, sizeof(*p_node) * m_num_node,
+                         cudaMemcpyDeviceToHost));
+
+    for (int i = 0; i < m_num_node; i++) {
+        p_node[i].pos = m_node[i].pos = p_pos[i];
+    }
+    
+    gpuErrchk(cudaMemcpy(m_node_cuda, p_node, sizeof(*p_node) * m_num_node,
+                         cudaMemcpyHostToDevice));
+
+    delete[] p_pos;
+    delete[] p_node;
+}
+
+void
 rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 {
     static int i = 0, j = 0;
@@ -794,68 +878,56 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
         if (isnan(psi))
             continue;
 
-        get_uv_vec(v, a, b);
-        get_repulse_vec(v, 0.0001);
+        //get_uv_vec(v, a, b);
+        //get_repulse_vec(v, 0.0001);
 
         break;
     }
 }
 
+__global__
 void
-rinne::force_directed()
+force_directed(rn_node *p_node, rn_pos *p_pos)
 {
-/*    if (m_num_node < 2)
-        return;
+    int id = blockDim.x * blockIdx.x + threadIdx.x;
 
-    //rn_pos *p_pos = new rn_pos[m_num_node];
-    //rn_pos *pos_idx = p_pos;
-    if (id == 0) {
-        m_pos_tmp = new rn_pos[m_num_node];
-    }
+    rn_node *p1;
+    p_pos = &p_pos[id];
 
-    //m_barrier->wait();
-
-    rn_pos *pos_idx = &m_pos_tmp[id];
-
-    for (rn_node *p1 = &m_node[id]; p1 < &m_node[m_num_node];
-         p1 += m_num_thread) {
+    //    if (id < num_node_cuda) {
+    for (p1 = &p_node[id]; p1 < p_node + num_node_cuda; p1 += num_node_cuda) {
         rn_node *p2;
         rn_vec v1 = {0.0, 0.0, 0.0};
         rn_vec v2;
-        double cos_theta_a, sin_theta_a;
-        double psi;
+        float cos_theta_a, sin_theta_a;
+        float psi;
 
-        cos_theta_a = cos(p1->pos.theta);
-        sin_theta_a = sin(p1->pos.theta);
+        cos_theta_a = cosf(p1->pos.theta);
+        sin_theta_a = sinf(p1->pos.theta);
 
-        for (p2 = m_node; p2 != &m_node[m_num_node]; p2++) {
+        for (p2 = p_node; p2 != &p_node[num_node_cuda]; p2++) {
             if (p1 == p2)
                 continue;
 
-            psi = acos(cos_theta_a * cos(p2->pos.theta) +
-                       sin_theta_a * sin(p2->pos.theta) *
-                       cos(p1->pos.phi - p2->pos.phi));
+            psi = acosf(cos_theta_a * cosf(p2->pos.theta) +
+                        sin_theta_a * sinf(p2->pos.theta) *
+                        cosf(p1->pos.phi - p2->pos.phi));
 
-            if (isnan(psi)) {
-                get_uv_vec_rand(v2, p1->pos);
-            } else {
-                get_uv_vec(v2, p1->pos, p2->pos);
-                get_repulse_vec(v2, psi);
-            }
+            get_uv_vec(v2, p1->pos, p2->pos);
+            get_repulse_vec(v2, psi);
 
             v1.x += v2.x;
             v1.y += v2.y;
             v1.z += v2.z;
         }
 
-
         rn_edge *p_edge;
         for (p_edge = p1->edge; p_edge != NULL; p_edge = p_edge->next) {
             rn_vec v3;
 
-            psi = acos(cos_theta_a * cos(p_edge->dst->pos.theta) +
-                       sin_theta_a * sin(p_edge->dst->pos.theta) *
-                       cos(p1->pos.phi - p_edge->dst->pos.phi));
+            psi = acosf(cos_theta_a * cosf(p_edge->dst->pos.theta) +
+                        sin_theta_a * sinf(p_edge->dst->pos.theta) *
+                        cosf(p1->pos.phi - p_edge->dst->pos.phi));
 
             if (isnan(psi))
                 continue;
@@ -871,9 +943,9 @@ rinne::force_directed()
         for (p_edge = p1->bp_edge; p_edge != NULL; p_edge = p_edge->bp_next) {
             rn_vec v3;
 
-            psi = acos(cos_theta_a * cos(p_edge->src->pos.theta) +
-                       sin_theta_a * sin(p_edge->src->pos.theta) *
-                       cos(p1->pos.phi - p_edge->src->pos.phi));
+            psi = acosf(cos_theta_a * cosf(p_edge->src->pos.theta) +
+                        sin_theta_a * sinf(p_edge->src->pos.theta) *
+                        cosf(p1->pos.phi - p_edge->src->pos.phi));
 
             if (isnan(psi))
                 continue;
@@ -887,7 +959,7 @@ rinne::force_directed()
         }
 
         rn_vec pvec, cross;
-        double rad, norm;
+        double rad;
 
         TO_RECTANGULAR(pvec, p1->pos, 1.0);
         DISTANCE2(rad, v1);
@@ -897,32 +969,14 @@ rinne::force_directed()
             rad = M_PI_4;
 
         CROSS_PRODUCT(cross, pvec, v1);
-        DISTANCE2(norm, cross);
-
-        norm = 1.0 / sqrt(norm);
-
-        cross.x *= norm;
-        cross.y *= norm;
-        cross.z *= norm;
-
+        NORMALIZE(cross);
         ROTATE(pvec, cross, rad);
 
-        *pos_idx = p1->pos;
-        TO_SPHERICAL(*pos_idx, pvec);
-        pos_idx += m_num_thread;
+        rn_pos pos = p1->pos;
+        TO_SPHERICAL(pos, pvec);
+        *p_pos = pos;
+        p_pos += num_node_cuda;
     }
-
-    //m_barrier->wait();
-
-    for (int i = 0; i < m_num_node; i++) {
-        m_node[i].pos = m_pos_tmp[i];
-    }
-
-    //m_barrier->wait();
-
-    if (id == 0)
-        delete m_pos_tmp;
-*/
 }
 
 void
@@ -933,6 +987,45 @@ rinne::init_pos()
         p->pos.theta = M_PI_2 * ((double)rand() / RAND_MAX) + M_PI_4;
         p->pos.phi   = 2 * M_PI * ((double)rand() / RAND_MAX);
     }
+}
+
+void
+rinne::init_graph_cuda()
+{
+    int i;
+    rn_node *p_node = new rn_node[m_num_node];
+    rn_edge *p_edge = new rn_edge[m_num_edge];
+
+    gpuErrchk(cudaMalloc((void**)&m_node_cuda,
+                         sizeof(*m_node_cuda) * m_num_node));
+    gpuErrchk(cudaMalloc((void**)&m_edge_cuda,
+                         sizeof(*m_edge_cuda) * m_num_edge));
+    gpuErrchk(cudaMalloc((void**)&m_pos_cuda,
+                         sizeof(*m_pos_cuda) * m_num_node));
+
+    for (i = 0; i < m_num_node; i++) {
+        p_node[i].pos = m_node[i].pos;
+        p_node[i].num_edge = m_node[i].num_edge;
+        p_node[i].num_bp_edge = m_node[i].num_bp_edge;
+
+        TO_CUDA_MEM(p_node[i].edge, m_node[i].edge, m_edge, m_edge_cuda);
+        TO_CUDA_MEM(p_node[i].bp_edge, m_node[i].bp_edge, m_edge, m_edge_cuda);
+    }
+
+    for (i = 0; i < m_num_edge; i++) {
+        TO_CUDA_MEM(p_edge[i].src, m_edge[i].src, m_node, m_node_cuda);
+        TO_CUDA_MEM(p_edge[i].dst, m_edge[i].dst, m_node, m_node_cuda);
+        TO_CUDA_MEM(p_edge[i].next, m_edge[i].next, m_edge, m_edge_cuda);
+        TO_CUDA_MEM(p_edge[i].bp_next, m_edge[i].bp_next, m_edge, m_edge_cuda);
+    }
+
+    gpuErrchk(cudaMemcpy(m_node_cuda, p_node, sizeof(*p_node) * m_num_node,
+                         cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(m_edge_cuda, p_edge, sizeof(*p_edge) * m_num_edge,
+                         cudaMemcpyHostToDevice));
+
+    delete[] p_node;
+    delete[] p_edge;
 }
 
 void
@@ -1004,6 +1097,7 @@ rinne::read_dot(char *path)
     m_factor_step /= m_num_node * 100;
 
     get_top_n();
+    init_graph_cuda();
 
     run();
 }

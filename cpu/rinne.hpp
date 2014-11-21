@@ -71,7 +71,6 @@ public:
     void on_resize(int w, int h);
     void force_directed();
     void reduce_step() { m_factor_step *= 0.5; }
-    void init_glui();
 
     void display();
 
