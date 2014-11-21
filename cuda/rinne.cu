@@ -21,6 +21,7 @@
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
 
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
                               boost::property<boost::vertex_name_t,
@@ -193,6 +194,31 @@ render_string(float x, float y, float z, std::string const& str)
     }
 }
 
+void
+render_string2d(std::string str, int x0, int y0)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, rinne_inst.get_window_w(), rinne_inst.get_window_h(), 0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+ 
+    // 画面上にテキスト描画
+    glRasterPos2f(x0, y0);
+    int size = (int)str.size();
+    for (int i = 0; i < size; ++i) {
+        char ic = str[i];
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ic);
+    }
+ 
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+}
+
 void*
 run(void *arg)
 {
@@ -329,6 +355,40 @@ rinne::rotate_view()
 }
 
 void
+rinne::draw_status()
+{
+    std::string str;
+
+    str = "total:";
+    glColor3f(1.0f, 1.0f, 1.0f);
+    render_string2d(str, 10, 15);
+
+    str = "#node = ";
+    str += boost::lexical_cast<std::string>(m_num_node);
+    render_string2d(str, 25, 30);
+
+    str = "#edge = ";
+    str += boost::lexical_cast<std::string>(m_num_edge);
+    render_string2d(str, 25, 45);
+
+    if (m_is_blink && m_top_idx > 0) {
+        rn_node *p = m_node_top[m_top_idx - 1];
+
+        str = m_label[p - m_node];
+        str += ":";
+        render_string2d(str, 10, 60);
+
+        str = "indegree  = ";
+        str += boost::lexical_cast<std::string>(p->num_bp_edge);
+        render_string2d(str, 25, 75);
+
+        str = "outdegree  = ";
+        str += boost::lexical_cast<std::string>(p->num_edge);
+        render_string2d(str, 25, 90);
+    }
+}
+
+void
 rinne::display()
 {
     update_time();
@@ -353,9 +413,10 @@ rinne::display()
     glutWireSphere(1.0, 16, 16);
 
     draw_node();
-    //draw_tau();
 
     glPopMatrix();
+
+    draw_status();
 
     glutSwapBuffers();
 }
@@ -950,8 +1011,13 @@ force_directed(rn_node *p_node, rn_pos *p_pos)
                         sin_theta_a * sinf(p2->pos.theta) *
                         cosf(p1->pos.phi - p2->pos.phi));
 
-            get_uv_vec(v2, p1->pos, p2->pos);
-            get_repulse_vec(v2, psi);
+            if (isnan(psi)) {
+                //TODO
+                v2.x = v2.y = v2.z = 0.0f;
+            } else {
+                get_uv_vec(v2, p1->pos, p2->pos);
+                get_repulse_vec(v2, psi);
+            }
 
             v1.x += v2.x;
             v1.y += v2.y;

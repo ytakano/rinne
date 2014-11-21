@@ -80,6 +80,8 @@ public:
     float get_factor_repulse() { return m_factor_repulse; }
     float get_factor_step() { return m_factor_step; }
     float get_factor_spring() { return m_factor_spring; }
+    int get_window_h() { return m_window_h; }
+    int get_window_w() { return m_window_w; }
 
     void display();
 
@@ -129,6 +131,7 @@ private:
     void draw_node();
     void draw_edge(double g, double b, double alpha);
     void draw_label();
+    void draw_status();
     void get_top_n();
     void update_time();
     void rotate_view();
