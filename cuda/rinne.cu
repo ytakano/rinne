@@ -968,28 +968,29 @@ rinne::copy_result()
     delete[] p_node;
 }
 
+__global__
 void
-rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
+get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 {
-    static int i = 0, j = 0;
-    static float theta[7] = {0.0,
-                             M_PI / 7.0,
-                             2 * M_PI / 7.0,
-                             3 * M_PI / 7.0,
-                             4 * M_PI / 7.0,
-                             5 * M_PI / 7.0,
-                             6 * M_PI / 7.0};
-    static float phi[11] = {0.0,
-                            M_PI / 11.0,
-                            2 * M_PI / 11.0,
-                            3 * M_PI / 11.0,
-                            4 * M_PI / 11.0,
-                            5 * M_PI / 11.0,
-                            6 * M_PI / 11.0,
-                            7 * M_PI / 11.0,
-                            8 * M_PI / 11.0,
-                            9 * M_PI / 11.0,
-                            10 * M_PI / 11.0};
+    int i = (int)&a.theta % 7, j = (int)&a.phi % 11;
+    float theta[7] = {0.0,
+                      M_PI / 7.0,
+                      2 * M_PI / 7.0,
+                      3 * M_PI / 7.0,
+                      4 * M_PI / 7.0,
+                      5 * M_PI / 7.0,
+                      6 * M_PI / 7.0};
+    float phi[11] = {0.0,
+                     M_PI / 11.0,
+                     2 * M_PI / 11.0,
+                     3 * M_PI / 11.0,
+                     4 * M_PI / 11.0,
+                     5 * M_PI / 11.0,
+                     6 * M_PI / 11.0,
+                     7 * M_PI / 11.0,
+                     8 * M_PI / 11.0,
+                     9 * M_PI / 11.0,
+                     10 * M_PI / 11.0};
 
     for (;;) {
         rn_pos b;
@@ -997,9 +998,10 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
         b.phi   = phi[j++];
 
         if (i >= 7)
-            i = i % 7;
+            i = 0;
+
         if (j >= 11)
-            j = j % 11;
+            j = 0;
 
         float psi;
         psi = acosf(cosf(a.theta) * cosf(b.theta) +
@@ -1009,8 +1011,8 @@ rinne::get_uv_vec_rand(rn_vec &v, const rn_pos &a)
         if (isnan(psi))
             continue;
 
-        //get_uv_vec(v, a, b);
-        //get_repulse_vec(v, 0.0001);
+        get_uv_vec(v, a, b);
+        get_repulse_vec(v, 0.0001);
 
         break;
     }
@@ -1045,8 +1047,7 @@ force_directed(rn_node *p_node, rn_pos *p_pos)
                         cosf(p1->pos.phi - p2->pos.phi));
 
             if (isnan(psi)) {
-                //TODO
-                v2.x = v2.y = v2.z = 0.0f;
+                get_uv_vec_rand(v2, p1->pos);
             } else {
                 get_uv_vec(v2, p1->pos, p2->pos);
                 get_repulse_vec(v2, psi);

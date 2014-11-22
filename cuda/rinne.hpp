@@ -143,7 +143,6 @@ private:
     void get_top_n();
     void update_time();
     void rotate_view();
-    void get_uv_vec_rand(rn_vec &v, const rn_pos &a);
     void get_color(double &g, double &b, double &alpha,
                    double min_b, double max_b,
                    double min_g, double max_g,
