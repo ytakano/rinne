@@ -181,7 +181,7 @@ __device__ __constant__ float factor_spring_cuda;
 __global__ void force_directed(rn_node *p_node, rn_pos *p_pos);
 
 void
-render_string(float x, float y, float z, std::string const& str)
+render_string(float x, float y, float z, std::string const &str)
 {
     int len;
     
@@ -195,7 +195,7 @@ render_string(float x, float y, float z, std::string const& str)
 }
 
 void
-render_string2d(std::string str, int x0, int y0)
+render_string2d(int x0, int y0, std::string const &str)
 {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -204,8 +204,7 @@ render_string2d(std::string str, int x0, int y0)
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
- 
-    // 画面上にテキスト描画
+
     glRasterPos2f(x0, y0);
     int size = (int)str.size();
     for (int i = 0; i < size; ++i) {
@@ -255,13 +254,24 @@ run(void *arg)
               << "\nblock size = " << block_size
               << "\ntotal thread = " << total_thread << std::endl;
 
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; ; i++) {
+        timeval t0, t1;
+        double sec, score;
+
+        gettimeofday(&t0, NULL);
         force_directed<<<grid_size, block_size>>>(rinne_inst.get_node_cuda(),
                                                   rinne_inst.get_pos_cuda());
         gpuErrchk(cudaDeviceSynchronize());
         rinne_inst.copy_result();
 
-        std::cout << i << std::endl;
+        gettimeofday(&t1, NULL);
+
+        sec = (double)t1.tv_sec + (double)t1.tv_usec * 0.000001;
+        sec -= (double)t0.tv_sec + (double)t0.tv_usec * 0.000001;
+
+        score = (double)(num_node * num_node + rinne_inst.get_num_edge() * 2) / sec;
+        rinne_inst.set_score(score);
+        rinne_inst.inc_loop();
 
         if (i == 25) {
             rinne_inst.reduce_step();
@@ -273,7 +283,17 @@ run(void *arg)
         //usleep(100000);
     }
 
+    rinne_inst.free_mem();
+
     return NULL;
+}
+
+void
+rinne::free_mem()
+{
+    cudaFree(m_node_cuda);
+    cudaFree(m_edge_cuda);
+    cudaFree(m_pos_cuda);
 }
 
 void
@@ -282,7 +302,7 @@ rinne::update_time()
     double  t, diff, r;
     double  cycle = m_cycle * 0.5;
     timeval tv;
-    
+
     gettimeofday(&tv, NULL);
 
     t = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
@@ -298,7 +318,7 @@ rinne::update_time()
         m_init_sec = t;
         m_top_idx++;
         if (m_top_idx > m_top_n)
-            m_top_idx = 0;
+            m_top_idx = 1;
     }
 }
 
@@ -359,32 +379,45 @@ rinne::draw_status()
 {
     std::string str;
 
-    str = "total:";
     glColor3f(1.0f, 1.0f, 1.0f);
-    render_string2d(str, 10, 15);
+
+    str = "score:";
+    render_string2d(10, 15, str);
+
+    str = "#opration/s = ";
+    str += boost::lexical_cast<std::string>((int)m_score);
+    render_string2d(25, 30, str);
+
+    str = "#loop = ";
+    str += boost::lexical_cast<std::string>(m_score_loop);
+    render_string2d(25, 45, str);
+
+    str = "graph status:";
+    glColor3f(1.0f, 1.0f, 1.0f);
+    render_string2d(10, 60, str);
 
     str = "#node = ";
     str += boost::lexical_cast<std::string>(m_num_node);
-    render_string2d(str, 25, 30);
+    render_string2d(25, 75, str);
 
     str = "#edge = ";
     str += boost::lexical_cast<std::string>(m_num_edge);
-    render_string2d(str, 25, 45);
+    render_string2d(25, 90, str);
 
     if (m_is_blink && m_top_idx > 0) {
         rn_node *p = m_node_top[m_top_idx - 1];
 
         str = m_label[p - m_node];
         str += ":";
-        render_string2d(str, 10, 60);
+        render_string2d(10, 105, str);
 
         str = "indegree  = ";
         str += boost::lexical_cast<std::string>(p->num_bp_edge);
-        render_string2d(str, 25, 75);
+        render_string2d(25, 120, str);
 
-        str = "outdegree  = ";
+        str = "outdegree = ";
         str += boost::lexical_cast<std::string>(p->num_edge);
-        render_string2d(str, 25, 90);
+        render_string2d(25, 135, str);
     }
 }
 
@@ -1148,15 +1181,6 @@ rinne::read_dot(char *path)
     m_node  = new rn_node[m_num_node];
     m_edge  = new rn_edge[m_num_edge];
     m_label = new std::string[m_num_node];
-
-/*
-    gpuErrchk(cudaMallocManaged((void**)&m_node,
-                                sizeof(*m_node) * m_num_node,
-                                cudaMemAttachGlobal));
-    gpuErrchk(cudaMallocManaged((void**)&m_edge,
-                                sizeof(*m_edge) * m_num_edge,
-                                cudaMemAttachGlobal));
-*/
 
     memset(m_node, 0, sizeof(*m_node) * m_num_node);
     memset(m_edge, 0, sizeof(*m_edge) * m_num_edge);

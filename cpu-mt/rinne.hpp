@@ -55,11 +55,13 @@ public:
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(50),
-              m_top_idx(0),
+              m_top_idx(1),
               m_factor_repulse(0.01),
               m_factor_spring(0.01),
               m_factor_step(1.0),
-              m_cycle(30.0)
+              m_cycle(30.0),
+              m_score(0.0),
+              m_score_loop(0)
     {
         timeval tv;
         gettimeofday(&tv, NULL);
@@ -75,6 +77,12 @@ public:
     void on_menu(int id);
     void force_directed(int id);
     void reduce_step() { m_factor_step *= 0.5; }
+    void inc_loop() { m_score_loop++; }
+    int  get_num_node() { return m_num_node; }
+    int  get_num_edge() { return m_num_edge; }
+    int  get_window_h() { return m_window_h; }
+    int  get_window_w() { return m_window_w; }
+    void set_score(double score) { m_score = score; }
 
     void display();
 
@@ -118,12 +126,15 @@ private:
     double m_current_sec;
     double m_prev_sec;
     double m_cycle;
+    double m_score;
+    int    m_score_loop;
 
     void init_pos();
     void draw_node();
     void draw_edge(double g, double b, double alpha);
     void draw_label();
     void draw_tau();
+    void draw_status();
     void get_top_n();
     void update_time();
     void rotate_view();

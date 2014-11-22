@@ -54,15 +54,17 @@ public:
               m_max_in_degree(0),
               m_max_out_degree(0),
               m_top_n(50),
-              m_top_idx(0),
+              m_top_idx(1),
               m_factor_repulse(0.1),
               m_factor_spring(0.01),
               m_factor_step(1.0),
-              m_cycle(30.0)
+              m_cycle(30.0),
+              m_score(0.0),
+              m_score_loop(0)
     {
         timeval tv;
         gettimeofday(&tv, NULL);
-        m_init_sec = (float)tv.tv_sec + (float)tv.tv_usec * 0.000001;
+        m_init_sec = (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
         m_prev_sec = m_current_sec = m_init_sec;
     }
 
@@ -74,14 +76,18 @@ public:
     void on_menu(int id);
     void reduce_step() { m_factor_step *= 0.5; }
     void copy_result();
+    void free_mem();
+    void inc_loop() { m_score_loop++; }
     int  get_num_node() { return m_num_node; }
+    int  get_num_edge() { return m_num_edge; }
     rn_node* get_node_cuda() { return m_node_cuda; }
-    rn_pos* get_pos_cuda() { return m_pos_cuda; }
+    rn_pos*  get_pos_cuda() { return m_pos_cuda; }
     float get_factor_repulse() { return m_factor_repulse; }
     float get_factor_step() { return m_factor_step; }
     float get_factor_spring() { return m_factor_spring; }
-    int get_window_h() { return m_window_h; }
-    int get_window_w() { return m_window_w; }
+    int   get_window_h() { return m_window_h; }
+    int   get_window_w() { return m_window_w; }
+    void  set_score(double score) { m_score = score; }
 
     void display();
 
@@ -121,10 +127,12 @@ private:
     float m_factor_repulse;
     float m_factor_spring;
     float m_factor_step;
-    float m_init_sec;
+    double m_init_sec;
     double m_current_sec;
     double m_prev_sec;
     double m_cycle;
+    double m_score;
+    int    m_score_loop;
 
     void init_graph_cuda();
     void init_pos();
