@@ -199,8 +199,7 @@ render_string2d(int x0, int y0, std::string const &str)
 void
 run()
 {
-    int i = 0;
-    for (;;) {
+    for (int i = 0; ; i++) {
         timeval t0, t1;
         double sec, score;
 
@@ -222,7 +221,7 @@ run()
         } else if (i == 100) {
             rinne_inst.reduce_step();
         } else if (i == 1000) {
-            return;
+            rinne_inst.reduce_step();
         }
         //usleep(100000);
     }
@@ -373,9 +372,6 @@ rinne::display()
 
     glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
     glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
-
-    glColor3f(0.4, 0.4, 0.4);
-    glutWireSphere(1.0, 16, 16);
 
     draw_node();
 
@@ -853,12 +849,19 @@ rinne::draw_node()
         alpha = EDGE_MAX_ALPHA;
     }
 
+    glColor3f(0.4, 0.4, 0.4);
+    glutWireSphere(1.0, 16, 16);
+
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(40.0, (double)m_window_w / (double)m_window_h,
                    0.1, -CAMERA_Y);
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
+
+    glColor3f(0.4, 0.4, 0.4);
+    glutWireSphere(1.0, 16, 16);
+
     draw_edge(g, b, alpha);
 
 

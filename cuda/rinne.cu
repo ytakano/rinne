@@ -279,6 +279,8 @@ run(void *arg)
             rinne_inst.reduce_step();
         } else if (i == 100) {
             rinne_inst.reduce_step();
+        } else if (i == 1000) {
+            rinne_inst.reduce_step();
         }
         //usleep(100000);
     }
@@ -441,9 +443,6 @@ rinne::display()
 
     glRotatef(360 * m_rotate_x, 1.0, 0.0, 0.0);
     glRotatef(360 * m_rotate_z, 0.0, 0.0, 1.0);
-
-    glColor3f(0.4, 0.4, 0.4);
-    glutWireSphere(1.0, 16, 16);
 
     draw_node();
 
@@ -778,6 +777,9 @@ rinne::draw_node()
         glPopMatrix();
     }
 
+    glColor3f(0.4, 0.4, 0.4);
+    glutWireSphere(1.0, 16, 16);
+
     // draw edges
     if (m_is_blink) {
         max_alpha = EDGE_MAX_ALPHA;
@@ -800,6 +802,10 @@ rinne::draw_node()
                    0.1, -CAMERA_Y);
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
+
+    glColor3f(0.4, 0.4, 0.4);
+    glutWireSphere(1.0, 16, 16);
+
     draw_edge(g, b, alpha);
 
 
@@ -875,7 +881,7 @@ void
 get_repulse_vec(rn_vec &uv, float psi)
 {
     float power;
-    float p = psi + M_PI;
+    float p = psi + M_PI * 0.01f;
 
     power = - factor_step_cuda * factor_repulse_cuda / (p * p);
 
@@ -968,7 +974,7 @@ rinne::copy_result()
     delete[] p_node;
 }
 
-__global__
+__device__
 void
 get_uv_vec_rand(rn_vec &v, const rn_pos &a)
 {

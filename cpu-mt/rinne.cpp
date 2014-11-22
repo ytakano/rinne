@@ -198,7 +198,7 @@ render_string2d(int x0, int y0, std::string const &str)
 void
 run(int id)
 {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; ; i++) {
         timeval t0, t1;
         double sec, score;
 
@@ -223,6 +223,8 @@ run(int id)
             } else if (i == 50) {
                 rinne_inst.reduce_step();
             } else if (i == 100) {
+                rinne_inst.reduce_step();
+            } else if (i == 1000) {
                 rinne_inst.reduce_step();
             }
         }
@@ -375,9 +377,6 @@ rinne::display()
 
     glRotated(360 * m_rotate_x, 1.0, 0.0, 0.0);
     glRotated(360 * m_rotate_z, 0.0, 0.0, 1.0);
-
-    glColor3f(0.4, 0.4, 0.4);
-    glutWireSphere(1.0, 16, 16);
 
     draw_node();
 
@@ -839,6 +838,9 @@ rinne::draw_node()
         glPopMatrix();
     }
 
+    glColor3f(0.4, 0.4, 0.4);
+    glutWireSphere(1.0, 16, 16);
+
     // draw edges
     if (m_is_blink) {
         max_alpha = EDGE_MAX_ALPHA;
@@ -861,7 +863,11 @@ rinne::draw_node()
                    0.1, -CAMERA_Y);
     gluLookAt(0.0, CAMERA_Y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
+
     draw_edge(g, b, alpha);
+    glColor3f(0.4, 0.4, 0.4);
+
+    glutWireSphere(1.0, 16, 16);
 
 
     // draw near side nodes
