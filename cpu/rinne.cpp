@@ -1161,7 +1161,7 @@ rinne::force_directed()
         m_node[i].pos = p_pos[i];
     }
 
-    delete p_pos;
+    delete[] p_pos;
 }
 
 void
